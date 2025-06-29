@@ -9,10 +9,14 @@
     "moduleResolution": "bundler"
   },
   "include": [
-    "main.ts"
+    "main.ts",
+    "src/services/**/*.ts",
+    "src/types/**/*.ts"
   ],
   "exclude": [
-    "src/**/*",
+    "src/components/**/*",
+    "src/index.tsx",
+    "src/App.tsx",
     "node_modules",
     "dist"
   ]
