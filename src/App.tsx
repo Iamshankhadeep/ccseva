@@ -36,6 +36,8 @@ interface AppState {
     animationsEnabled: boolean;
     timezone?: string;
     resetHour?: number;
+    plan?: 'Pro' | 'Max5' | 'Max20' | 'Custom' | 'auto';
+    customTokenLimit?: number;
   };
 }
 
@@ -55,6 +57,8 @@ const App: React.FC = () => {
       animationsEnabled: true,
       timezone: 'America/Los_Angeles',
       resetHour: 0,
+      plan: 'auto',
+      customTokenLimit: 500000,
     },
   });
 
@@ -192,11 +196,29 @@ const App: React.FC = () => {
   };
 
   // Update preferences
-  const updatePreferences = (newPreferences: Partial<AppState['preferences']>) => {
+  const updatePreferences = async (newPreferences: Partial<AppState['preferences']>) => {
     setState((prev) => ({
       ...prev,
       preferences: { ...prev.preferences, ...newPreferences },
     }));
+
+    // Send preferences to backend if they affect usage calculation
+    if (newPreferences.plan !== undefined || 
+        newPreferences.customTokenLimit !== undefined ||
+        newPreferences.timezone !== undefined ||
+        newPreferences.resetHour !== undefined) {
+      try {
+        await window.electronAPI.updatePreferences({
+          ...state.preferences,
+          ...newPreferences,
+        });
+        // Refresh data to reflect new settings
+        await loadUsageStats(false);
+      } catch (error) {
+        console.error('Failed to update preferences:', error);
+        toast.error('Failed to update preferences');
+      }
+    }
   };
 
   // Handle navigation

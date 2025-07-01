@@ -170,6 +170,23 @@ class CCSevaApp {
     ipcMain.handle('take-screenshot', async () => {
       return this.takeScreenshot();
     });
+
+    ipcMain.handle('update-preferences', async (_, preferences) => {
+      try {
+        // Update the usage service configuration
+        this.usageService.updateConfiguration({
+          timezone: preferences.timezone,
+          resetHour: preferences.resetHour,
+          plan: preferences.plan,
+          customTokenLimit: preferences.customTokenLimit,
+        });
+        // Return success
+        return { success: true };
+      } catch (error) {
+        console.error('Error updating preferences:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      }
+    });
   }
 
   private startUsagePolling() {

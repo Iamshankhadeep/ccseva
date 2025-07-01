@@ -11,6 +11,7 @@ export interface ElectronAPI {
   refreshData: () => Promise<any>;
   quitApp: () => Promise<void>;
   takeScreenshot: () => Promise<ScreenshotResult>;
+  updatePreferences: (preferences: any) => Promise<{ success: boolean; error?: string }>;
   onUsageUpdated: (callback: () => void) => void;
   removeUsageUpdatedListener: (callback: () => void) => void;
 }

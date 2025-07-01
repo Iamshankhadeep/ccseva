@@ -1,5 +1,6 @@
 import type React from 'react';
 import type { UsageStats } from '../types/usage';
+import { PLAN_DEFINITIONS } from '../constants/plans';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
@@ -109,33 +110,81 @@ const KeyMetricsRow: React.FC<{
   stats: UsageStats;
   timeRemaining: string;
 }> = ({ stats, timeRemaining }) => (
-  <div className="grid grid-cols-3 gap-4 text-center">
-    <div className="space-y-2">
-      <div className="text-2xl font-bold text-neutral-100 font-primary">
-        {formatNumber(stats.tokensUsed)}
+  <div className="space-y-6">
+    {/* 5-Hour Rolling Window Stats */}
+    {stats.rollingWindow && (
+      <Card className="bg-neutral-800/50 border-neutral-700">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">⏱️</span>
+              <h4 className="text-sm font-semibold text-white">5-Hour Rolling Window</h4>
+            </div>
+            <Badge variant={stats.rollingWindow.percentageOfLimit > 90 ? 'destructive' : 
+                           stats.rollingWindow.percentageOfLimit > 70 ? 'secondary' : 
+                           'default'}>
+              {Math.round(stats.rollingWindow.percentageOfLimit)}% used
+            </Badge>
+          </div>
+          
+          <Progress 
+            value={stats.rollingWindow.windowProgress} 
+            className="mb-3 h-2"
+          />
+          
+          <div className="grid grid-cols-3 gap-4 text-sm">
+            <div>
+              <div className="text-neutral-400">Messages</div>
+              <div className="text-white font-medium">
+                {stats.rollingWindow.messagesInWindow} / {PLAN_DEFINITIONS[stats.currentPlan]?.messagesPerWindow || 'Custom'}
+              </div>
+            </div>
+            <div>
+              <div className="text-neutral-400">Tokens</div>
+              <div className="text-white font-medium">
+                {formatNumber(stats.rollingWindow.tokensInWindow)}
+              </div>
+            </div>
+            <div>
+              <div className="text-neutral-400">Time Left</div>
+              <div className="text-white font-medium">
+                {Math.floor(stats.rollingWindow.timeRemaining / (60 * 60 * 1000))}h {Math.floor((stats.rollingWindow.timeRemaining % (60 * 60 * 1000)) / (60 * 1000))}m
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    )}
+    
+    {/* Original metrics */}
+    <div className="grid grid-cols-3 gap-4 text-center">
+      <div className="space-y-2">
+        <div className="text-2xl font-bold text-neutral-100 font-primary">
+          {formatNumber(stats.tokensUsed)}
+        </div>
+        <div className="text-sm text-neutral-400 font-primary">Tokens Used</div>
+        <div className="text-xs text-neutral-500 font-primary">
+          of {formatNumber(stats.tokenLimit)}
+        </div>
       </div>
-      <div className="text-sm text-neutral-400 font-primary">Tokens Used</div>
-      <div className="text-xs text-neutral-500 font-primary">
-        of {formatNumber(stats.tokenLimit)}
-      </div>
-    </div>
 
-    <div className="space-y-2">
-      <div className="text-2xl font-bold text-neutral-100 font-primary">
-        {formatCurrency(stats.today.totalCost)}
+      <div className="space-y-2">
+        <div className="text-2xl font-bold text-neutral-100 font-primary">
+          {formatCurrency(stats.today.totalCost)}
+        </div>
+        <div className="text-sm text-neutral-warm-400 font-primary">Cost Today</div>
+        <div className="text-xs text-neutral-500 font-primary">
+          {stats.today.totalTokens.toLocaleString()} tokens
+        </div>
       </div>
-      <div className="text-sm text-neutral-warm-400 font-primary">Cost Today</div>
-      <div className="text-xs text-neutral-500 font-primary">
-        {stats.today.totalTokens.toLocaleString()} tokens
-      </div>
-    </div>
 
-    <div className="space-y-2">
-      <div className="text-2xl font-bold text-neutral-100 font-primary">
-        {formatNumber(stats.tokensRemaining)}
+      <div className="space-y-2">
+        <div className="text-2xl font-bold text-neutral-100 font-primary">
+          {formatNumber(stats.tokensRemaining)}
+        </div>
+        <div className="text-sm text-neutral-warm-400 font-primary">Remaining</div>
+        <div className="text-xs text-neutral-500 font-primary">{timeRemaining}</div>
       </div>
-      <div className="text-sm text-neutral-warm-400 font-primary">Remaining</div>
-      <div className="text-xs text-neutral-500 font-primary">{timeRemaining}</div>
     </div>
   </div>
 );

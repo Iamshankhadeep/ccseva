@@ -4,10 +4,12 @@ import type {
   MenuBarData,
   PredictionInfo,
   ResetTimeInfo,
+  RollingWindowStats,
   UsageStats,
   UserConfiguration,
   VelocityInfo,
 } from '../types/usage.js';
+import { PLAN_DEFINITIONS, WINDOW_DURATION, detectPlanFromUsage } from '../constants/plans.js';
 import { ResetTimeService } from './resetTimeService.js';
 import { SessionTracker } from './sessionTracker.js';
 
@@ -100,7 +102,15 @@ export class CCUsageService {
   updateConfiguration(config: Partial<UserConfiguration>): void {
     this.resetTimeService.updateConfiguration(config);
     if (config.plan) {
-      this.currentPlan = config.plan === 'auto' ? 'Custom' : config.plan;
+      if (config.plan === 'auto') {
+        // Auto-detection mode - will be determined from usage
+        this.currentPlan = 'Pro'; // Start with Pro as default
+      } else {
+        this.currentPlan = config.plan;
+      }
+    }
+    if (config.customTokenLimit) {
+      this.detectedTokenLimit = config.customTokenLimit;
     }
     // Clear cache to force recalculation with new config
     this.cachedStats = null;
@@ -245,6 +255,8 @@ export class CCUsageService {
       percentageUsed: Math.min(100, (tokensUsed / tokenLimit) * 100),
       // Enhanced session tracking
       sessionTracking,
+      // Rolling window stats
+      rollingWindow: this.calculateRollingWindowStats(blocks, tokenLimit),
     };
   }
 
@@ -347,6 +359,59 @@ export class CCUsageService {
 
     // Return tokens per minute like Python script
     return totalTokens / 60;
+  }
+
+  /**
+   * Calculate rolling 5-hour window statistics
+   */
+  private calculateRollingWindowStats(blocks: SessionBlock[], tokenLimit: number): RollingWindowStats {
+    const now = new Date();
+    const windowStart = new Date(now.getTime() - WINDOW_DURATION);
+    
+    // Calculate tokens used in the current 5-hour window
+    let tokensInWindow = 0;
+    
+    for (const block of blocks) {
+      if (block.isGap) continue;
+      
+      const blockStart = block.startTime;
+      const blockEnd = block.actualEndTime || block.endTime || now;
+      
+      // Skip blocks that ended before the window started
+      if (blockEnd < windowStart) continue;
+      
+      // Skip blocks that haven't started yet
+      if (blockStart > now) continue;
+      
+      // Calculate overlap with the window
+      const overlapStart = blockStart > windowStart ? blockStart : windowStart;
+      const overlapEnd = blockEnd < now ? blockEnd : now;
+      
+      if (overlapEnd > overlapStart) {
+        const blockDuration = blockEnd.getTime() - blockStart.getTime();
+        const overlapDuration = overlapEnd.getTime() - overlapStart.getTime();
+        
+        if (blockDuration > 0) {
+          const blockTokens = this.getTotalTokensFromBlock(block);
+          const proportionalTokens = blockTokens * (overlapDuration / blockDuration);
+          tokensInWindow += proportionalTokens;
+        }
+      }
+    }
+    
+    // Get plan definition for message calculation
+    const planDef = PLAN_DEFINITIONS[this.currentPlan] || PLAN_DEFINITIONS.Custom;
+    const messagesInWindow = Math.round(tokensInWindow / planDef.tokensPerMessage);
+    
+    return {
+      windowStart,
+      windowEnd: new Date(windowStart.getTime() + WINDOW_DURATION),
+      tokensInWindow: Math.round(tokensInWindow),
+      messagesInWindow,
+      percentageOfLimit: (tokensInWindow / tokenLimit) * 100,
+      timeRemaining: WINDOW_DURATION - (now.getTime() - windowStart.getTime()),
+      windowProgress: ((now.getTime() - windowStart.getTime()) / WINDOW_DURATION) * 100,
+    };
   }
 
   /**
@@ -575,23 +640,11 @@ export class CCUsageService {
   }
 
   private detectPlan(totalTokens: number): 'Pro' | 'Max5' | 'Max20' | 'Custom' {
-    if (totalTokens <= 7000) return 'Pro';
-    if (totalTokens <= 35000) return 'Max5';
-    if (totalTokens <= 140000) return 'Max20';
-    return 'Custom';
+    return detectPlanFromUsage(totalTokens).name;
   }
 
   private getTokenLimit(plan: string): number {
-    switch (plan) {
-      case 'Pro':
-        return 7000;
-      case 'Max5':
-        return 35000;
-      case 'Max20':
-        return 140000;
-      default:
-        return 500000; // Custom high limit
-    }
+    return PLAN_DEFINITIONS[plan]?.tokenLimit || 500000;
   }
 
   private calculatePredictedDepletion(

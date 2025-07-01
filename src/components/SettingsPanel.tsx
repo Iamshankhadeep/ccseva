@@ -1,5 +1,6 @@
 import type React from 'react';
 import type { UsageStats } from '../types/usage';
+import { PLAN_DEFINITIONS } from '../constants/plans';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -15,6 +16,8 @@ interface SettingsPanelProps {
     animationsEnabled: boolean;
     timezone?: string;
     resetHour?: number;
+    plan?: 'Pro' | 'Max5' | 'Max20' | 'Custom' | 'auto';
+    customTokenLimit?: number;
   };
   onUpdatePreferences: (preferences: Partial<SettingsPanelProps['preferences']>) => void;
   stats: UsageStats;
@@ -160,6 +163,77 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
               />
             </div>
           </div> */}
+
+          {/* Plan Selection */}
+          <div className="space-y-3">
+            <div className="flex items-center space-x-3">
+              <span className="text-2xl">📊</span>
+              <div>
+                <div className="text-white font-medium">Subscription Plan</div>
+                <div className="text-white/60 text-sm">
+                  Select your Claude plan for accurate usage tracking
+                </div>
+              </div>
+            </div>
+
+            <div className="ml-11 space-y-3">
+              <Select
+                value={preferences.plan || 'auto'}
+                onValueChange={(value) => handlePreferenceChange('plan', value)}
+              >
+                <SelectTrigger className="w-full bg-white/10 border-white/20 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Auto-detect</SelectItem>
+                  <SelectItem value="Pro">Claude Pro ($20/month)</SelectItem>
+                  <SelectItem value="Max5">Claude Max - Expanded ($100/month)</SelectItem>
+                  <SelectItem value="Max20">Claude Max - Maximum ($200/month)</SelectItem>
+                  <SelectItem value="Custom">Custom</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {preferences.plan && preferences.plan !== 'auto' && (
+                <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4 space-y-2">
+                  <div className="text-sm text-white/70">
+                    <span className="font-medium text-white">{PLAN_DEFINITIONS[preferences.plan]?.displayName}</span>
+                  </div>
+                  <div className="text-sm text-white/60">
+                    • {PLAN_DEFINITIONS[preferences.plan]?.messagesPerWindow} messages per 5-hour window
+                  </div>
+                  <div className="text-sm text-white/60">
+                    • {PLAN_DEFINITIONS[preferences.plan]?.tokenLimit.toLocaleString()} token limit
+                  </div>
+                  <div className="text-sm text-white/60">
+                    • {PLAN_DEFINITIONS[preferences.plan]?.description}
+                  </div>
+                </div>
+              )}
+
+              {preferences.plan === 'Custom' && (
+                <div className="space-y-2">
+                  <div className="text-white/70 text-sm">Custom Token Limit (per 5-hour window)</div>
+                  <input
+                    type="number"
+                    value={preferences.customTokenLimit || 500000}
+                    onChange={(e) => handlePreferenceChange('customTokenLimit', Number.parseInt(e.target.value))}
+                    className="w-full bg-white/10 border border-white/20 text-white rounded-lg px-3 py-2"
+                    min="1000"
+                    step="1000"
+                  />
+                </div>
+              )}
+
+              {stats.currentPlan && preferences.plan === 'auto' && (
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
+                  <div className="text-blue-300 text-sm">
+                    <span className="text-lg mr-2">🔍</span>
+                    Auto-detected: {PLAN_DEFINITIONS[stats.currentPlan]?.displayName || stats.currentPlan}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Timezone Configuration */}
           <div className="space-y-3">

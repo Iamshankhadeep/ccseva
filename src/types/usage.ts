@@ -48,6 +48,26 @@ export interface PredictionInfo {
   onTrackForReset: boolean; // will tokens last until reset
 }
 
+export interface RollingWindowStats {
+  windowStart: Date; // Start of current 5-hour window
+  windowEnd: Date; // End of current 5-hour window
+  tokensInWindow: number; // Tokens used in current window
+  messagesInWindow: number; // Estimated messages in current window
+  percentageOfLimit: number; // Percentage of plan limit used in window
+  timeRemaining: number; // Milliseconds remaining in window
+  windowProgress: number; // Percentage of window elapsed (0-100)
+}
+
+export interface PlanDefinition {
+  name: 'Pro' | 'Max5' | 'Max20' | 'Custom';
+  displayName: string;
+  monthlyPrice: number;
+  messagesPerWindow: number; // Messages per 5-hour window
+  tokensPerMessage: number; // Average tokens per message (estimate)
+  tokenLimit: number; // Calculated token limit per window
+  description: string;
+}
+
 export interface UsageStats {
   today: DailyUsage;
   thisWeek: DailyUsage[];
@@ -63,6 +83,7 @@ export interface UsageStats {
   tokensRemaining: number;
   percentageUsed: number;
   sessionTracking?: SessionTracking; // 5-hour rolling session tracking
+  rollingWindow?: RollingWindowStats; // 5-hour rolling window statistics
   // Enhanced features
   enhancedResetInfo?: {
     nextResetTime: string;
