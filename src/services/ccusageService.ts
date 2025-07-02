@@ -151,7 +151,7 @@ export class CCUsageService {
 
       if (!blocks || blocks.length === 0) {
         console.error('No blocks data received');
-        return this.getMockStats();
+        return this.getDefaultStats(dailyData);
       }
 
       const stats = this.parseBlocksData(blocks, dailyData);
@@ -164,8 +164,7 @@ export class CCUsageService {
     } catch (error) {
       console.error('Error fetching usage stats:', error);
 
-      // Return mock data for development/testing
-      return this.getMockStats();
+      return this.getDefaultStats();
     }
   }
 
@@ -178,7 +177,8 @@ export class CCUsageService {
 
     if (!activeBlock) {
       this.currentActiveBlock = null;
-      return this.getDefaultStats();
+      // Process daily data even when no active session exists
+      return this.getDefaultStats(dailyData);
     }
 
     // Store the active block for reset time calculation
@@ -491,118 +491,6 @@ export class CCUsageService {
     };
   }
 
-  private getMockStats(): UsageStats {
-    const today = new Date().toISOString().split('T')[0];
-    const tokensUsed = 4200;
-    const tokenLimit = 7000;
-    const todayCost = 2.45;
-    const burnRate = 35;
-
-    // Create mock data for enhanced features
-    const resetInfo = this.resetTimeService.calculateResetInfo();
-    const velocity: VelocityInfo = {
-      current: burnRate,
-      average24h: 32,
-      average7d: 28,
-      trend: 'increasing',
-      trendPercent: 12.5,
-      peakHour: 14, // 2 PM
-      isAccelerating: true,
-    };
-
-    const prediction: PredictionInfo = {
-      depletionTime: new Date(Date.now() + 80 * 60 * 60 * 1000).toISOString(),
-      confidence: 85,
-      daysRemaining: 3.3,
-      recommendedDailyLimit: 950,
-      onTrackForReset: true,
-    };
-
-    return {
-      today: {
-        date: today,
-        totalTokens: 850,
-        totalCost: todayCost,
-        models: {
-          'claude-3-5-sonnet-20241022': { tokens: 650, cost: 1.95 },
-          'claude-3-haiku-20240307': { tokens: 200, cost: 0.5 },
-        },
-      },
-      thisWeek: this.generateMockWeekData(),
-      thisMonth: this.generateMockMonthData(),
-      burnRate, // legacy field
-      velocity,
-      prediction,
-      resetInfo,
-      predictedDepleted: prediction.depletionTime, // legacy field
-      currentPlan: 'Pro',
-      tokenLimit,
-      tokensUsed,
-      tokensRemaining: tokenLimit - tokensUsed,
-      percentageUsed: (tokensUsed / tokenLimit) * 100,
-    };
-  }
-
-  private generateMockWeekData(): DailyUsage[] {
-    const result: DailyUsage[] = [];
-    const now = new Date();
-
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-      const dateStr = date.toISOString().split('T')[0];
-      const tokens = Math.floor(Math.random() * 1000) + 200;
-      const cost = tokens * 0.003; // Mock cost calculation
-
-      result.push({
-        date: dateStr,
-        totalTokens: tokens,
-        totalCost: cost,
-        models: {
-          'claude-3-5-sonnet-20241022': {
-            tokens: Math.floor(tokens * 0.7),
-            cost: cost * 0.7,
-          },
-          'claude-3-haiku-20240307': {
-            tokens: Math.floor(tokens * 0.3),
-            cost: cost * 0.3,
-          },
-        },
-      });
-    }
-
-    return result;
-  }
-
-  private generateMockMonthData(): DailyUsage[] {
-    const result: DailyUsage[] = [];
-    const now = new Date();
-
-    for (let i = 29; i >= 0; i--) {
-      const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-      const dateStr = date.toISOString().split('T')[0];
-      const tokens = Math.floor(Math.random() * 800) + 100;
-      const cost = tokens * 0.003;
-
-      result.push({
-        date: dateStr,
-        totalTokens: tokens,
-        totalCost: cost,
-        models: {
-          'claude-3-5-sonnet-20241022': {
-            tokens: Math.floor(tokens * 0.6),
-            cost: cost * 0.6,
-          },
-          'claude-3-haiku-20240307': {
-            tokens: Math.floor(tokens * 0.4),
-            cost: cost * 0.4,
-          },
-        },
-      });
-    }
-
-    return result;
-  }
-
   private detectPlan(totalTokens: number): 'Pro' | 'Max5' | 'Max20' | 'Custom' {
     if (totalTokens <= 7000) return 'Pro';
     if (totalTokens <= 35000) return 'Max5';
@@ -712,9 +600,38 @@ export class CCUsageService {
     return 'safe';
   }
 
-  private getDefaultStats(): UsageStats {
+  private getDefaultStats(dailyData?: DailyDataEntry[]): UsageStats {
     const today = new Date().toISOString().split('T')[0];
     const resetInfo = this.resetTimeService.calculateResetInfo();
+
+    // Process daily data if available, otherwise use empty data
+    let processedDailyData: DailyUsage[];
+    if (dailyData && dailyData.length > 0) {
+      // Process the daily data from ccusage, filtering out synthetic models
+      processedDailyData = dailyData.map((day) => ({
+        date: day.date,
+        totalTokens:
+          day.inputTokens + day.outputTokens + day.cacheCreationTokens + day.cacheReadTokens,
+        totalCost: day.totalCost,
+        models: day.modelBreakdowns
+          .filter((mb: ModelBreakdown) => mb.modelName !== '<synthetic>')
+          .reduce(
+            (acc: { [key: string]: { tokens: number; cost: number } }, mb: ModelBreakdown) => {
+              acc[mb.modelName] = {
+                tokens:
+                  mb.inputTokens + mb.outputTokens + mb.cacheCreationTokens + mb.cacheReadTokens,
+                cost: mb.cost,
+              };
+              return acc;
+            },
+            {}
+          ),
+      }));
+    } else {
+      processedDailyData = [];
+    }
+
+    const todayData = processedDailyData.find((d) => d.date === today) || this.getEmptyDailyUsage();
 
     const velocity: VelocityInfo = {
       current: 0,
@@ -734,25 +651,36 @@ export class CCUsageService {
       onTrackForReset: true,
     };
 
+    // Get actual reset time info (will show "No active session")
+    const actualResetInfo = this.getTimeUntilActualReset();
+
     return {
-      today: {
-        date: today,
-        totalTokens: 0,
-        totalCost: 0,
-        models: {},
-      },
-      thisWeek: [],
-      thisMonth: [],
+      today: todayData,
+      thisWeek: processedDailyData.filter((d) => {
+        const date = new Date(d.date);
+        const weekAgo = new Date();
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        return date >= weekAgo;
+      }),
+      thisMonth: processedDailyData.filter((d) => {
+        const date = new Date(d.date);
+        const monthAgo = new Date();
+        monthAgo.setDate(monthAgo.getDate() - 30);
+        return date >= monthAgo;
+      }),
       burnRate: 0, // legacy field
       velocity,
       prediction,
       resetInfo,
+      actualResetInfo,
       predictedDepleted: null, // legacy field
-      currentPlan: 'Pro',
-      tokenLimit: 7000,
-      tokensUsed: 0,
-      tokensRemaining: 7000,
-      percentageUsed: 0,
+      currentPlan: this.currentPlan,
+      tokenLimit: this.getTokenLimit(this.currentPlan),
+      tokensUsed: 0, // No active session means no current session tokens
+      tokensRemaining: this.getTokenLimit(this.currentPlan), // Full limit available
+      percentageUsed: 0, // No active session usage
+      // Enhanced session tracking (empty for no active session)
+      sessionTracking: this.sessionTracker.updateFromBlocks([]),
     };
   }
 
