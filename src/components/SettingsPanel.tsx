@@ -241,7 +241,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   {preferences.menuBarDisplayMode === 'cost' && (
                     <span>Menu bar will show total cost only (e.g., $1.25)</span>
                   )}
-                  {(!preferences.menuBarDisplayMode || preferences.menuBarDisplayMode === 'alternate') && (
+                  {(!preferences.menuBarDisplayMode ||
+                    preferences.menuBarDisplayMode === 'alternate') && (
                     <span>Menu bar will alternate between percentage and cost every 3 seconds</span>
                   )}
                 </div>
