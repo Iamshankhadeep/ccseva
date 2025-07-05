@@ -33,6 +33,7 @@ interface AppState {
     resetHour?: number;
     plan?: 'auto' | 'Pro' | 'Max5' | 'Max20' | 'Custom';
     customTokenLimit?: number;
+    menuBarDisplayMode?: 'percentage' | 'cost' | 'alternate';
   };
 }
 

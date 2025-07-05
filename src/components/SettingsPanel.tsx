@@ -10,6 +10,7 @@ interface SettingsPanelProps {
     resetHour?: number;
     plan?: 'auto' | 'Pro' | 'Max5' | 'Max20' | 'Custom';
     customTokenLimit?: number;
+    menuBarDisplayMode?: 'percentage' | 'cost' | 'alternate';
   };
   onUpdatePreferences: (preferences: Partial<SettingsPanelProps['preferences']>) => void;
   stats: UsageStats;
@@ -193,6 +194,55 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   Current detected plan: <span className="font-medium">{stats.currentPlan}</span>
                   {stats.tokenLimit && (
                     <span className="ml-2">({stats.tokenLimit.toLocaleString()} tokens/day)</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Menu Bar Display Mode */}
+          <div className="space-y-3">
+            <div className="flex items-center space-x-3">
+              <span className="text-2xl">📊</span>
+              <div>
+                <div className="text-white font-medium">Menu Bar Display</div>
+                <div className="text-white/60 text-sm">
+                  Choose how information is displayed in the menu bar
+                </div>
+              </div>
+            </div>
+
+            <div className="ml-11 space-y-3">
+              <div>
+                <div className="text-white/70 text-sm mb-2">Display Mode</div>
+                <Select
+                  value={preferences.menuBarDisplayMode || 'alternate'}
+                  onValueChange={(value: 'percentage' | 'cost' | 'alternate') =>
+                    handlePreferenceChange('menuBarDisplayMode', value)
+                  }
+                >
+                  <SelectTrigger className="w-full bg-white/5 border-white/10 text-white hover:bg-white/10">
+                    <SelectValue placeholder="Select display mode" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="percentage">Percentage Only</SelectItem>
+                    <SelectItem value="cost">Cost Only</SelectItem>
+                    <SelectItem value="alternate">Alternate (switch every 3s)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
+                <div className="text-blue-300 text-sm">
+                  <span className="text-lg mr-2">💡</span>
+                  {preferences.menuBarDisplayMode === 'percentage' && (
+                    <span>Menu bar will show usage percentage only (e.g., 75%)</span>
+                  )}
+                  {preferences.menuBarDisplayMode === 'cost' && (
+                    <span>Menu bar will show total cost only (e.g., $1.25)</span>
+                  )}
+                  {(!preferences.menuBarDisplayMode || preferences.menuBarDisplayMode === 'alternate') && (
+                    <span>Menu bar will alternate between percentage and cost every 3 seconds</span>
                   )}
                 </div>
               </div>

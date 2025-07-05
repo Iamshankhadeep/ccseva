@@ -7,6 +7,7 @@ export interface AppSettings {
   resetHour: number;
   plan: 'auto' | 'Pro' | 'Max5' | 'Max20' | 'Custom';
   customTokenLimit?: number;
+  menuBarDisplayMode: 'percentage' | 'cost' | 'alternate';
 }
 
 export class SettingsService {
@@ -27,6 +28,7 @@ export class SettingsService {
       resetHour: 0,
       plan: 'auto',
       customTokenLimit: undefined,
+      menuBarDisplayMode: 'alternate',
     };
 
     // Ensure settings directory exists

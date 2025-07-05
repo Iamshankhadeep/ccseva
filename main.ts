@@ -20,6 +20,7 @@ class CCSevaApp {
   private displayInterval: NodeJS.Timeout | null = null;
   private showPercentage = true;
   private cachedMenuBarData: any = null;
+  private menuBarDisplayMode: 'percentage' | 'cost' | 'alternate' = 'alternate';
 
   constructor() {
     this.usageService = CCUsageService.getInstance();
@@ -30,11 +31,19 @@ class CCSevaApp {
   async initialize() {
     await app.whenReady();
 
+    // Load settings on startup
+    const settings = await this.settingsService.loadSettings();
+    this.menuBarDisplayMode = settings.menuBarDisplayMode || 'alternate';
+
     this.createTray();
     this.createWindow();
     this.setupIPC();
     this.startUsagePolling();
-    this.startDisplayToggle();
+    
+    // Only start display toggle if mode is 'alternate'
+    if (this.menuBarDisplayMode === 'alternate') {
+      this.startDisplayToggle();
+    }
 
     app.on('window-all-closed', () => {
       // Prevent app from quitting, keep in menu bar
@@ -83,12 +92,24 @@ class CCSevaApp {
   private updateTrayDisplay() {
     if (!this.cachedMenuBarData) return;
 
-    if (this.showPercentage) {
-      const percentage = Math.round(this.cachedMenuBarData.percentageUsed);
-      this.tray?.setTitle(`${percentage}%`);
-    } else {
-      const cost = this.cachedMenuBarData.cost;
-      this.tray?.setTitle(`$${cost.toFixed(2)}`);
+    switch (this.menuBarDisplayMode) {
+      case 'percentage':
+        const percentage = Math.round(this.cachedMenuBarData.percentageUsed);
+        this.tray?.setTitle(`${percentage}%`);
+        break;
+      case 'cost':
+        const cost = this.cachedMenuBarData.cost;
+        this.tray?.setTitle(`$${cost.toFixed(2)}`);
+        break;
+      case 'alternate':
+        if (this.showPercentage) {
+          const pct = Math.round(this.cachedMenuBarData.percentageUsed);
+          this.tray?.setTitle(`${pct}%`);
+        } else {
+          const cst = this.cachedMenuBarData.cost;
+          this.tray?.setTitle(`$${cst.toFixed(2)}`);
+        }
+        break;
     }
   }
 
@@ -187,6 +208,27 @@ class CCSevaApp {
     ipcMain.handle('save-settings', async (_, settings) => {
       try {
         await this.settingsService.saveSettings(settings);
+        
+        // Handle menu bar display mode change
+        if (settings.menuBarDisplayMode && settings.menuBarDisplayMode !== this.menuBarDisplayMode) {
+          this.menuBarDisplayMode = settings.menuBarDisplayMode;
+          
+          // Stop or start display toggle based on mode
+          if (this.menuBarDisplayMode === 'alternate') {
+            if (!this.displayInterval) {
+              this.startDisplayToggle();
+            }
+          } else {
+            if (this.displayInterval) {
+              clearInterval(this.displayInterval);
+              this.displayInterval = null;
+            }
+          }
+          
+          // Update display immediately
+          this.updateTrayDisplay();
+        }
+        
         return { success: true };
       } catch (error) {
         console.error('Error saving settings:', error);
