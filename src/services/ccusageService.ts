@@ -84,7 +84,12 @@ export class CCUsageService {
   private sessionTracker: SessionTracker;
   private historicalBlocks: SessionBlock[] = []; // Store session blocks for analysis
   private currentActiveBlock: SessionBlock | null = null; // Store current active block
+  // Plan selected by the user ("auto" by default for auto-detection)
+  private selectedPlan: 'auto' | 'Pro' | 'Max5' | 'Max20' | 'Custom' = 'auto';
+  // Actual plan used for calculations after applying auto detection/selection
   private currentPlan: 'Pro' | 'Max5' | 'Max20' | 'Custom' = 'Pro';
+  // Custom token limit specified by the user when plan === 'Custom'
+  private customTokenLimit: number | undefined = undefined;
   private detectedTokenLimit = 7000;
 
   constructor() {
@@ -122,9 +127,14 @@ export class CCUsageService {
 
   updateConfiguration(config: Partial<UserConfiguration>): void {
     this.resetTimeService.updateConfiguration(config);
-    if (config.plan) {
-      this.currentPlan = config.plan === 'auto' ? 'Custom' : config.plan;
+
+    if (config.plan !== undefined) {
+      this.selectedPlan = config.plan;
     }
+    if (config.customTokenLimit !== undefined) {
+      this.customTokenLimit = config.customTokenLimit;
+    }
+
     // Clear cache to force recalculation with new config
     this.cachedStats = null;
   }
@@ -170,6 +180,39 @@ export class CCUsageService {
   }
 
   /**
+   * Resolve the plan and token limit based on user selection and detected usage
+   */
+  private resolvePlan(blocks: SessionBlock[]): {
+    plan: 'Pro' | 'Max5' | 'Max20' | 'Custom';
+    tokenLimit: number;
+  } {
+    if (this.selectedPlan === 'auto') {
+      // Auto-detect plan based on maximum usage across all blocks
+      const maxTokens = this.getMaxTokensFromBlocks(blocks);
+      const detectedPlan = this.detectPlan(maxTokens);
+      return {
+        plan: detectedPlan,
+        tokenLimit: detectedPlan === 'Custom' ? maxTokens : this.getTokenLimit(detectedPlan),
+      };
+    }
+
+    if (this.selectedPlan === 'Custom') {
+      // Use custom token limit or fallback to detected limit
+      const tokenLimit = this.customTokenLimit ?? this.getMaxTokensFromBlocks(blocks);
+      return {
+        plan: 'Custom',
+        tokenLimit,
+      };
+    }
+
+    // Use explicitly selected plan
+    return {
+      plan: this.selectedPlan,
+      tokenLimit: this.getTokenLimit(this.selectedPlan),
+    };
+  }
+
+  /**
    * Parse blocks data similar to Python implementation
    */
   private parseBlocksData(blocks: SessionBlock[], dailyData?: DailyDataEntry[]): UsageStats {
@@ -187,18 +230,10 @@ export class CCUsageService {
     // Get tokens from active session
     const tokensUsed = this.getTotalTokensFromBlock(activeBlock);
 
-    // Auto-detect token limit from highest previous session if needed
-    if (this.currentPlan === 'Custom' || (this.currentPlan === 'Pro' && tokensUsed > 7000)) {
-      this.detectedTokenLimit = this.getMaxTokensFromBlocks(blocks);
-      if (tokensUsed > 7000 && this.currentPlan === 'Pro') {
-        // Auto-switch to custom like Python script
-        this.currentPlan = 'Custom';
-      }
-    } else {
-      this.detectedTokenLimit = this.getTokenLimit(this.currentPlan);
-    }
-
-    const tokenLimit = this.detectedTokenLimit;
+    // Resolve plan and token limit based on user selection and detected usage
+    const { plan, tokenLimit } = this.resolvePlan(blocks);
+    this.currentPlan = plan;
+    this.detectedTokenLimit = tokenLimit;
 
     // Calculate burn rate from last hour across all sessions
     const burnRate = this.calculateHourlyBurnRate(blocks);
@@ -748,10 +783,19 @@ export class CCUsageService {
       prediction,
       resetInfo,
       predictedDepleted: null, // legacy field
-      currentPlan: 'Pro',
-      tokenLimit: 7000,
+      currentPlan:
+        this.selectedPlan === 'auto'
+          ? 'Pro'
+          : (this.selectedPlan as 'Pro' | 'Max5' | 'Max20' | 'Custom'),
+      tokenLimit:
+        this.selectedPlan === 'Custom'
+          ? (this.customTokenLimit ?? 500000)
+          : this.getTokenLimit(this.selectedPlan === 'auto' ? 'Pro' : this.selectedPlan),
       tokensUsed: 0,
-      tokensRemaining: 7000,
+      tokensRemaining:
+        this.selectedPlan === 'Custom'
+          ? (this.customTokenLimit ?? 500000)
+          : this.getTokenLimit(this.selectedPlan === 'auto' ? 'Pro' : this.selectedPlan),
       percentageUsed: 0,
     };
   }

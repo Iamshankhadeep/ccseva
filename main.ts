@@ -34,6 +34,12 @@ class CCSevaApp {
     // Load settings on startup
     const settings = await this.settingsService.loadSettings();
     this.menuBarDisplayMode = settings.menuBarDisplayMode || 'alternate';
+    
+    // Apply plan configuration to usage service
+    this.usageService.updateConfiguration({
+      plan: settings.plan,
+      customTokenLimit: settings.customTokenLimit,
+    });
 
     this.createTray();
     this.createWindow();
@@ -208,6 +214,12 @@ class CCSevaApp {
     ipcMain.handle('save-settings', async (_, settings) => {
       try {
         await this.settingsService.saveSettings(settings);
+        
+        // Propagate plan settings to usage service
+        this.usageService.updateConfiguration({
+          plan: settings.plan,
+          customTokenLimit: settings.customTokenLimit,
+        });
         
         // Handle menu bar display mode change
         if (settings.menuBarDisplayMode && settings.menuBarDisplayMode !== this.menuBarDisplayMode) {
