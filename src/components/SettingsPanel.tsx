@@ -11,6 +11,7 @@ interface SettingsPanelProps {
     plan?: 'auto' | 'Pro' | 'Max5' | 'Max20' | 'Custom';
     customTokenLimit?: number;
     menuBarDisplayMode?: 'percentage' | 'cost' | 'alternate';
+    menuBarAlternateInterval?: number;
   };
   onUpdatePreferences: (preferences: Partial<SettingsPanelProps['preferences']>) => void;
   stats: UsageStats;
@@ -227,9 +228,27 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   <SelectContent>
                     <SelectItem value="percentage">Percentage Only</SelectItem>
                     <SelectItem value="cost">Cost Only</SelectItem>
-                    <SelectItem value="alternate">Alternate (switch every 3s)</SelectItem>
+                  <SelectItem value="alternate">Alternate</SelectItem>
                   </SelectContent>
                 </Select>
+                {preferences.menuBarDisplayMode === 'alternate' && (
+                  <div className="mt-3">
+                    <div className="text-white/70 text-sm mb-2">Switch Interval (seconds)</div>
+                    <input
+                      type="number"
+                      min={3}
+                      max={60}
+                      value={preferences.menuBarAlternateInterval ?? 3}
+                      onChange={(e) =>
+                        handlePreferenceChange(
+                          'menuBarAlternateInterval',
+                          Math.min(60, Math.max(3, Number.parseInt(e.target.value) || 3))
+                        )
+                      }
+                      className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white placeholder:text-white/50 focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
@@ -243,7 +262,10 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   )}
                   {(!preferences.menuBarDisplayMode ||
                     preferences.menuBarDisplayMode === 'alternate') && (
-                    <span>Menu bar will alternate between percentage and cost every 3 seconds</span>
+                    <span>
+                      Menu bar will alternate between percentage and cost every{' '}
+                      {preferences.menuBarAlternateInterval ?? 3} seconds
+                    </span>
                   )}
                 </div>
               </div>

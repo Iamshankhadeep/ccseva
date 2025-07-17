@@ -18,6 +18,7 @@ A beautiful macOS menu bar app for tracking your Claude Code usage in real-time.
 
 - **Real-time monitoring** - Live token usage tracking with 30-second updates
 - **Menu bar integration** - Percentage indicator with color-coded status
+- **Customizable alternating interval** - Set how often the menu bar switches between cost and percentage
 - **Smart plan detection** - Auto-detects Pro/Max5/Max20/Custom plans
 - **Usage analytics** - 7-day charts, model breakdowns, and trend analysis
 - **Smart notifications** - Alerts at 70% and 90% thresholds with cooldown
