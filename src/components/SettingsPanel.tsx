@@ -11,6 +11,7 @@ interface SettingsPanelProps {
     plan?: 'auto' | 'Pro' | 'Max5' | 'Max20' | 'Custom';
     customTokenLimit?: number;
     menuBarDisplayMode?: 'percentage' | 'cost' | 'alternate';
+    menuBarAlternateInterval?: number;
   };
   onUpdatePreferences: (preferences: Partial<SettingsPanelProps['preferences']>) => void;
   stats: UsageStats;
@@ -22,6 +23,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   stats,
 }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [intervalInputValue, setIntervalInputValue] = useState<string>('');
 
   const handlePreferenceChange = (key: string, value: boolean | number | string) => {
     onUpdatePreferences({ [key]: value });
@@ -35,6 +37,33 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
     return () => clearInterval(interval);
   }, []);
+
+  // Sync interval input value with preferences
+  useEffect(() => {
+    const currentInterval = preferences.menuBarAlternateInterval ?? 3;
+    setIntervalInputValue(currentInterval.toString());
+  }, [preferences.menuBarAlternateInterval]);
+
+  // Handle interval input changes
+  const handleIntervalInputChange = (value: string) => {
+    setIntervalInputValue(value);
+  };
+
+  // Handle interval input blur (validation and save)
+  const handleIntervalInputBlur = () => {
+    const numValue = Number.parseInt(intervalInputValue);
+    if (Number.isNaN(numValue) || numValue < 3) {
+      // Invalid or too low - revert to minimum
+      const validValue = 3;
+      setIntervalInputValue(validValue.toString());
+      handlePreferenceChange('menuBarAlternateInterval', validValue);
+    } else {
+      // Valid value - clamp to max and save
+      const clampedValue = Math.min(60, numValue);
+      setIntervalInputValue(clampedValue.toString());
+      handlePreferenceChange('menuBarAlternateInterval', clampedValue);
+    }
+  };
 
   // Calculate real-time countdown
   const getRealtimeCountdown = () => {
@@ -227,9 +256,27 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   <SelectContent>
                     <SelectItem value="percentage">Percentage Only</SelectItem>
                     <SelectItem value="cost">Cost Only</SelectItem>
-                    <SelectItem value="alternate">Alternate (switch every 3s)</SelectItem>
+                    <SelectItem value="alternate">Alternate (interval switching)</SelectItem>
                   </SelectContent>
                 </Select>
+                {preferences.menuBarDisplayMode === 'alternate' && (
+                  <div className="mt-3">
+                    <div className="text-white/70 text-sm mb-2">Switch Interval (seconds)</div>
+                    <input
+                      type="number"
+                      min={3}
+                      max={60}
+                      value={intervalInputValue}
+                      onChange={(e) => handleIntervalInputChange(e.target.value)}
+                      onBlur={handleIntervalInputBlur}
+                      placeholder="3"
+                      className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white placeholder:text-white/50 focus:border-blue-500 focus:outline-none"
+                    />
+                    <div className="text-white/50 text-xs mt-1">
+                      Minimum: 3 seconds, Maximum: 60 seconds
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
@@ -243,7 +290,10 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   )}
                   {(!preferences.menuBarDisplayMode ||
                     preferences.menuBarDisplayMode === 'alternate') && (
-                    <span>Menu bar will alternate between percentage and cost every 3 seconds</span>
+                    <span>
+                      Menu bar will alternate between percentage and cost every{' '}
+                      {preferences.menuBarAlternateInterval ?? 3} seconds
+                    </span>
                   )}
                 </div>
               </div>

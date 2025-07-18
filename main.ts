@@ -21,6 +21,7 @@ class CCSevaApp {
   private showPercentage = true;
   private cachedMenuBarData: any = null;
   private menuBarDisplayMode: 'percentage' | 'cost' | 'alternate' = 'alternate';
+  private alternateInterval = 3;
 
   constructor() {
     this.usageService = CCUsageService.getInstance();
@@ -34,6 +35,7 @@ class CCSevaApp {
     // Load settings on startup
     const settings = await this.settingsService.loadSettings();
     this.menuBarDisplayMode = settings.menuBarDisplayMode || 'alternate';
+    this.alternateInterval = settings.menuBarAlternateInterval || 3;
 
     this.createTray();
     this.createWindow();
@@ -114,11 +116,11 @@ class CCSevaApp {
   }
 
   private startDisplayToggle() {
-    // Switch between percentage and cost every 3 seconds
+    // Switch between percentage and cost using configured interval
     this.displayInterval = setInterval(() => {
       this.showPercentage = !this.showPercentage;
       this.updateTrayDisplay();
-    }, 3000);
+    }, this.alternateInterval * 1000);
   }
 
   private createWindow() {
@@ -212,7 +214,7 @@ class CCSevaApp {
         // Handle menu bar display mode change
         if (settings.menuBarDisplayMode && settings.menuBarDisplayMode !== this.menuBarDisplayMode) {
           this.menuBarDisplayMode = settings.menuBarDisplayMode;
-          
+
           // Stop or start display toggle based on mode
           if (this.menuBarDisplayMode === 'alternate') {
             if (!this.displayInterval) {
@@ -224,9 +226,24 @@ class CCSevaApp {
               this.displayInterval = null;
             }
           }
-          
+
           // Update display immediately
           this.updateTrayDisplay();
+        }
+
+        // Handle alternate interval change
+        if (
+          typeof settings.menuBarAlternateInterval === 'number' &&
+          settings.menuBarAlternateInterval !== this.alternateInterval
+        ) {
+          this.alternateInterval = Math.min(60, Math.max(3, settings.menuBarAlternateInterval));
+
+          if (this.menuBarDisplayMode === 'alternate') {
+            if (this.displayInterval) {
+              clearInterval(this.displayInterval);
+            }
+            this.startDisplayToggle();
+          }
         }
         
         return { success: true };
