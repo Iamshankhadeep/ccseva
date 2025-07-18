@@ -23,6 +23,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   stats,
 }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [intervalInputValue, setIntervalInputValue] = useState<string>('');
 
   const handlePreferenceChange = (key: string, value: boolean | number | string) => {
     onUpdatePreferences({ [key]: value });
@@ -36,6 +37,33 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
     return () => clearInterval(interval);
   }, []);
+
+  // Sync interval input value with preferences
+  useEffect(() => {
+    const currentInterval = preferences.menuBarAlternateInterval ?? 3;
+    setIntervalInputValue(currentInterval.toString());
+  }, [preferences.menuBarAlternateInterval]);
+
+  // Handle interval input changes
+  const handleIntervalInputChange = (value: string) => {
+    setIntervalInputValue(value);
+  };
+
+  // Handle interval input blur (validation and save)
+  const handleIntervalInputBlur = () => {
+    const numValue = Number.parseInt(intervalInputValue);
+    if (Number.isNaN(numValue) || numValue < 3) {
+      // Invalid or too low - revert to minimum
+      const validValue = 3;
+      setIntervalInputValue(validValue.toString());
+      handlePreferenceChange('menuBarAlternateInterval', validValue);
+    } else {
+      // Valid value - clamp to max and save
+      const clampedValue = Math.min(60, numValue);
+      setIntervalInputValue(clampedValue.toString());
+      handlePreferenceChange('menuBarAlternateInterval', clampedValue);
+    }
+  };
 
   // Calculate real-time countdown
   const getRealtimeCountdown = () => {
@@ -228,7 +256,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   <SelectContent>
                     <SelectItem value="percentage">Percentage Only</SelectItem>
                     <SelectItem value="cost">Cost Only</SelectItem>
-                  <SelectItem value="alternate">Alternate</SelectItem>
+                    <SelectItem value="alternate">Alternate (interval switching)</SelectItem>
                   </SelectContent>
                 </Select>
                 {preferences.menuBarDisplayMode === 'alternate' && (
@@ -238,15 +266,15 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                       type="number"
                       min={3}
                       max={60}
-                      value={preferences.menuBarAlternateInterval ?? 3}
-                      onChange={(e) =>
-                        handlePreferenceChange(
-                          'menuBarAlternateInterval',
-                          Math.min(60, Math.max(3, Number.parseInt(e.target.value) || 3))
-                        )
-                      }
+                      value={intervalInputValue}
+                      onChange={(e) => handleIntervalInputChange(e.target.value)}
+                      onBlur={handleIntervalInputBlur}
+                      placeholder="3"
                       className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white placeholder:text-white/50 focus:border-blue-500 focus:outline-none"
                     />
+                    <div className="text-white/50 text-xs mt-1">
+                      Minimum: 3 seconds, Maximum: 60 seconds
+                    </div>
                   </div>
                 )}
               </div>
