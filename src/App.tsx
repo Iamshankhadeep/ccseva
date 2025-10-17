@@ -35,6 +35,7 @@ interface AppState {
     customTokenLimit?: number;
     menuBarDisplayMode?: 'percentage' | 'cost' | 'alternate';
     menuBarAlternateInterval?: number;
+    menuBarCostSource?: 'today' | 'sessionWindow';
   };
 }
 
@@ -51,7 +52,9 @@ const App: React.FC = () => {
       resetHour: 0,
       plan: 'auto',
       customTokenLimit: undefined,
+      menuBarDisplayMode: 'alternate',
       menuBarAlternateInterval: 3,
+      menuBarCostSource: 'today',
     },
   });
 

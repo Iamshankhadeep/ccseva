@@ -9,6 +9,7 @@ export interface AppSettings {
   customTokenLimit?: number;
   menuBarDisplayMode: 'percentage' | 'cost' | 'alternate';
   menuBarAlternateInterval: number;
+  menuBarCostSource: 'today' | 'sessionWindow';
 }
 
 export class SettingsService {
@@ -31,6 +32,7 @@ export class SettingsService {
       customTokenLimit: undefined,
       menuBarDisplayMode: 'alternate',
       menuBarAlternateInterval: 3,
+      menuBarCostSource: 'today',
     };
 
     // Ensure settings directory exists
