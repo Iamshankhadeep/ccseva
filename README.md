@@ -1,3 +1,34 @@
+
+<div align="right">
+  <details>
+    <summary >🌐 Language</summary>
+    <div>
+      <div align="center">
+        <a href="https://openaitx.github.io/view.html?user=Iamshankhadeep&project=ccseva&lang=en">English</a>
+        | <a href="https://openaitx.github.io/view.html?user=Iamshankhadeep&project=ccseva&lang=zh-CN">简体中文</a>
+        | <a href="https://openaitx.github.io/view.html?user=Iamshankhadeep&project=ccseva&lang=zh-TW">繁體中文</a>
+        | <a href="https://openaitx.github.io/view.html?user=Iamshankhadeep&project=ccseva&lang=ja">日本語</a>
+        | <a href="https://openaitx.github.io/view.html?user=Iamshankhadeep&project=ccseva&lang=ko">한국어</a>
+        | <a href="https://openaitx.github.io/view.html?user=Iamshankhadeep&project=ccseva&lang=hi">हिन्दी</a>
+        | <a href="https://openaitx.github.io/view.html?user=Iamshankhadeep&project=ccseva&lang=th">ไทย</a>
+        | <a href="https://openaitx.github.io/view.html?user=Iamshankhadeep&project=ccseva&lang=fr">Français</a>
+        | <a href="https://openaitx.github.io/view.html?user=Iamshankhadeep&project=ccseva&lang=de">Deutsch</a>
+        | <a href="https://openaitx.github.io/view.html?user=Iamshankhadeep&project=ccseva&lang=es">Español</a>
+        | <a href="https://openaitx.github.io/view.html?user=Iamshankhadeep&project=ccseva&lang=it">Italiano</a>
+        | <a href="https://openaitx.github.io/view.html?user=Iamshankhadeep&project=ccseva&lang=ru">Русский</a>
+        | <a href="https://openaitx.github.io/view.html?user=Iamshankhadeep&project=ccseva&lang=pt">Português</a>
+        | <a href="https://openaitx.github.io/view.html?user=Iamshankhadeep&project=ccseva&lang=nl">Nederlands</a>
+        | <a href="https://openaitx.github.io/view.html?user=Iamshankhadeep&project=ccseva&lang=pl">Polski</a>
+        | <a href="https://openaitx.github.io/view.html?user=Iamshankhadeep&project=ccseva&lang=ar">العربية</a>
+        | <a href="https://openaitx.github.io/view.html?user=Iamshankhadeep&project=ccseva&lang=fa">فارسی</a>
+        | <a href="https://openaitx.github.io/view.html?user=Iamshankhadeep&project=ccseva&lang=tr">Türkçe</a>
+        | <a href="https://openaitx.github.io/view.html?user=Iamshankhadeep&project=ccseva&lang=vi">Tiếng Việt</a>
+        | <a href="https://openaitx.github.io/view.html?user=Iamshankhadeep&project=ccseva&lang=id">Bahasa Indonesia</a>
+      </div>
+    </div>
+  </details>
+</div>
+
 # CCSeva 🤖
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
