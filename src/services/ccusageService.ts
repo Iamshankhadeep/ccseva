@@ -793,7 +793,6 @@ export class CCUsageService {
     };
   }
 
-
   /**
    * Get actual next reset time based on active session block end time
    */

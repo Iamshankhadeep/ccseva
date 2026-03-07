@@ -600,7 +600,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats, status }) => {
             </div>
           </CardContent>
         </Card>
-
       </div>
     </TooltipProvider>
   );
