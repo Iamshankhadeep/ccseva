@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Analytics } from './components/Analytics';
 import { Dashboard } from './components/Dashboard';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { LiveMonitoring } from './components/LiveMonitoring';
 import { LoadingScreen } from './components/LoadingScreen';
 import { NavigationTabs } from './components/NavigationTabs';
 import { SettingsPanel } from './components/SettingsPanel';
@@ -505,6 +506,10 @@ const App: React.FC = () => {
             <div className="space-y-3 pb-3">
               {state.currentView === 'dashboard' && (
                 <Dashboard stats={currentStats} status={usageStatus} />
+              )}
+
+              {state.currentView === 'live' && (
+                <LiveMonitoring stats={currentStats} onRefresh={refreshData} />
               )}
 
               {state.currentView === 'analytics' && (

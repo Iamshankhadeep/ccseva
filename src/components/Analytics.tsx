@@ -1,5 +1,6 @@
 import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { formatNumber } from '../lib/utils';
 import type { UsageStats } from '../types/usage';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
@@ -14,13 +15,6 @@ type ChartTimeRange = '7d' | '30d';
 type ChartType = 'area' | 'line' | 'bar';
 
 // Helper functions extracted to reduce complexity
-const formatNumber = (num: number) => {
-  if (!num || Number.isNaN(num)) return '0';
-  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-  if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-  return num.toLocaleString();
-};
-
 const formatCurrency = (amount: number) => {
   if (!amount || Number.isNaN(amount)) return '$0.000';
   return new Intl.NumberFormat('en-US', {
@@ -166,22 +160,23 @@ const ControlTabs: React.FC<{
 
 // Summary stats component
 const SummaryStats: React.FC<{
-  totalWeekTokens: number;
-  totalWeekCost: number;
+  totalTokens: number;
+  totalCost: number;
   avgDailyTokens: number;
   avgDailyCost: number;
-}> = ({ totalWeekTokens, totalWeekCost, avgDailyTokens, avgDailyCost }) => (
+  timeRangeLabel: string;
+}> = ({ totalTokens, totalCost, avgDailyTokens, avgDailyCost, timeRangeLabel }) => (
   <div className="grid grid-cols-4 gap-3">
     <Card className="bg-neutral-900/50 border-neutral-800">
       <CardContent className="p-3 text-center">
-        <div className="text-xl font-bold text-white mb-1">{formatNumber(totalWeekTokens)}</div>
-        <div className="text-xs text-neutral-400">Total Tokens (7d)</div>
+        <div className="text-xl font-bold text-white mb-1">{formatNumber(totalTokens)}</div>
+        <div className="text-xs text-neutral-400">Total Tokens ({timeRangeLabel})</div>
       </CardContent>
     </Card>
     <Card className="bg-neutral-900/50 border-neutral-800">
       <CardContent className="p-3 text-center">
-        <div className="text-xl font-bold text-white mb-1">{formatCurrency(totalWeekCost)}</div>
-        <div className="text-xs text-neutral-400">Total Cost (7d)</div>
+        <div className="text-xl font-bold text-white mb-1">{formatCurrency(totalCost)}</div>
+        <div className="text-xs text-neutral-400">Total Cost ({timeRangeLabel})</div>
       </CardContent>
     </Card>
     <Card className="bg-neutral-900/50 border-neutral-800">
@@ -552,10 +547,13 @@ export const Analytics: React.FC<AnalyticsProps> = ({ stats }) => {
   const chartData = useChartData(stats, timeRange);
   const modelBreakdownData = useModelBreakdownData(stats);
 
-  const totalWeekTokens = stats.thisWeek.reduce((sum, day) => sum + day.totalTokens, 0);
-  const totalWeekCost = stats.thisWeek.reduce((sum, day) => sum + day.totalCost, 0);
-  const avgDailyTokens = totalWeekTokens / 7;
-  const avgDailyCost = totalWeekCost / 7;
+  const summaryData = timeRange === '7d' ? stats.thisWeek : stats.thisMonth;
+  const summaryDays = timeRange === '7d' ? 7 : 30;
+  const timeRangeLabel = timeRange === '7d' ? '7d' : '30d';
+  const totalTokens = summaryData.reduce((sum, day) => sum + day.totalTokens, 0);
+  const totalCost = summaryData.reduce((sum, day) => sum + day.totalCost, 0);
+  const avgDailyTokens = totalTokens / summaryDays;
+  const avgDailyCost = totalCost / summaryDays;
 
   return (
     <TooltipProvider>
@@ -591,10 +589,11 @@ export const Analytics: React.FC<AnalyticsProps> = ({ stats }) => {
             />
 
             <SummaryStats
-              totalWeekTokens={totalWeekTokens}
-              totalWeekCost={totalWeekCost}
+              totalTokens={totalTokens}
+              totalCost={totalCost}
               avgDailyTokens={avgDailyTokens}
               avgDailyCost={avgDailyCost}
+              timeRangeLabel={timeRangeLabel}
             />
           </CardContent>
         </Card>

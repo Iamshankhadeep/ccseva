@@ -31,16 +31,6 @@ interface DailyDataEntry {
   modelBreakdowns: ModelBreakdown[];
 }
 
-interface UsageDataItem {
-  date: string;
-  inputTokens?: number;
-  outputTokens?: number;
-  cacheCreationTokens?: number;
-  totalCost?: number;
-  cost?: number;
-  modelBreakdowns?: ModelBreakdown[];
-}
-
 // Define SessionBlock interface matching ccusage package structure
 interface LoadedUsageEntry {
   timestamp: Date;
@@ -505,9 +495,26 @@ export class CCUsageService {
       average7d,
       trend,
       trendPercent: Math.round(trendPercent * 10) / 10,
-      peakHour: 14, // Simplified for now
+      peakHour: this.calculatePeakHourFromBlocks(blocks),
       isAccelerating: trend === 'increasing' && trendPercent > 20,
     };
+  }
+
+  private calculatePeakHourFromBlocks(blocks: SessionBlock[]): number {
+    const hourBuckets = new Array(24).fill(0);
+    for (const block of blocks) {
+      if (block.isGap) continue;
+      for (const entry of block.entries) {
+        const hour = new Date(entry.timestamp).getHours();
+        const tokens =
+          entry.usage.inputTokens +
+          entry.usage.outputTokens +
+          entry.usage.cacheCreationInputTokens +
+          entry.usage.cacheReadInputTokens;
+        hourBuckets[hour] += tokens;
+      }
+    }
+    return hourBuckets.indexOf(Math.max(...hourBuckets));
   }
 
   private getEmptyDailyUsage(): DailyUsage {
@@ -673,89 +680,6 @@ export class CCUsageService {
     }
   }
 
-  private calculatePredictedDepletion(
-    tokensUsed: number,
-    tokenLimit: number,
-    burnRate: number
-  ): string | null {
-    if (burnRate <= 0) return null;
-
-    const tokensRemaining = tokenLimit - tokensUsed;
-    if (tokensRemaining <= 0) return 'Depleted';
-
-    const hoursRemaining = tokensRemaining / burnRate;
-    const depletionDate = new Date(Date.now() + hoursRemaining * 60 * 60 * 1000);
-
-    return depletionDate.toISOString();
-  }
-
-  private groupByModel(data: UsageDataItem[]): { [key: string]: { tokens: number; cost: number } } {
-    const models: { [key: string]: { tokens: number; cost: number } } = {};
-
-    for (const item of data) {
-      this.processItemModelBreakdowns(item, models);
-    }
-
-    return models;
-  }
-
-  private processItemModelBreakdowns(
-    item: UsageDataItem,
-    models: { [key: string]: { tokens: number; cost: number } }
-  ): void {
-    if (!item.modelBreakdowns || !Array.isArray(item.modelBreakdowns)) {
-      return;
-    }
-
-    for (const breakdown of item.modelBreakdowns) {
-      this.aggregateModelData(breakdown, models);
-    }
-  }
-
-  private aggregateModelData(
-    breakdown: ModelBreakdown,
-    models: { [key: string]: { tokens: number; cost: number } }
-  ): void {
-    const modelName = breakdown.modelName || 'unknown';
-    if (!models[modelName]) {
-      models[modelName] = { tokens: 0, cost: 0 };
-    }
-    models[modelName].tokens +=
-      (breakdown.inputTokens || 0) +
-      (breakdown.outputTokens || 0) +
-      (breakdown.cacheCreationTokens || 0);
-    models[modelName].cost += breakdown.cost || 0;
-  }
-
-  private groupByDay(data: UsageDataItem[], days: number): DailyUsage[] {
-    const result: DailyUsage[] = [];
-    const now = new Date();
-
-    for (let i = 0; i < days; i++) {
-      const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-      const dateStr = date.toISOString().split('T')[0];
-
-      const dayData = data.filter((item) => item.date === dateStr);
-      const totalTokens = dayData.reduce((sum, item) => {
-        return (
-          sum + (item.inputTokens || 0) + (item.outputTokens || 0) + (item.cacheCreationTokens || 0)
-        );
-      }, 0);
-      const totalCost = dayData.reduce((sum, item) => {
-        return sum + (item.totalCost || item.cost || 0);
-      }, 0);
-
-      result.push({
-        date: dateStr,
-        totalTokens,
-        totalCost,
-        models: this.groupByModel(dayData),
-      });
-    }
-
-    return result.reverse();
-  }
-
   private getUsageStatus(percentageUsed: number): 'safe' | 'warning' | 'critical' {
     if (percentageUsed >= 90) return 'critical';
     if (percentageUsed >= 70) return 'warning';
@@ -816,73 +740,6 @@ export class CCUsageService {
   }
 
   /**
-   * Calculate burn rate from daily data (for legacy compatibility)
-   */
-  private calculateBurnRate(data: UsageDataItem[]): number {
-    const last24Hours = data.filter((item) => {
-      const itemDate = new Date(item.date);
-      const now = new Date();
-      const hoursDiff = (now.getTime() - itemDate.getTime()) / (1000 * 60 * 60);
-      return hoursDiff <= 24;
-    });
-
-    const totalTokens = last24Hours.reduce((sum, item) => {
-      return (
-        sum + (item.inputTokens || 0) + (item.outputTokens || 0) + (item.cacheCreationTokens || 0)
-      );
-    }, 0);
-    return Math.round(totalTokens / 24); // tokens per hour
-  }
-
-  /**
-   * Calculate enhanced velocity information based on Python implementation
-   */
-  private calculateVelocityInfo(data: UsageDataItem[]): VelocityInfo {
-    const now = new Date();
-
-    // Current burn rate (last 24 hours)
-    const current = this.calculateBurnRate(data);
-
-    // 24-hour average
-    const last24Hours = data.filter((item) => {
-      const itemDate = new Date(item.date);
-      const hoursDiff = (now.getTime() - itemDate.getTime()) / (1000 * 60 * 60);
-      return hoursDiff <= 24;
-    });
-    const average24h = this.calculateAverageBurnRate(last24Hours);
-
-    // 7-day average
-    const last7Days = data.filter((item) => {
-      const itemDate = new Date(item.date);
-      const daysDiff = (now.getTime() - itemDate.getTime()) / (1000 * 60 * 60 * 24);
-      return daysDiff <= 7;
-    });
-    const average7d = this.calculateAverageBurnRate(last7Days);
-
-    // Trend analysis
-    const trendPercent = average24h > 0 ? ((current - average24h) / average24h) * 100 : 0;
-    let trend: 'increasing' | 'decreasing' | 'stable' = 'stable';
-
-    if (Math.abs(trendPercent) > 15) {
-      // 15% threshold for trend detection
-      trend = trendPercent > 0 ? 'increasing' : 'decreasing';
-    }
-
-    // Peak hour analysis
-    const peakHour = this.calculatePeakUsageHour(data);
-
-    return {
-      current,
-      average24h,
-      average7d,
-      trend,
-      trendPercent: Math.round(trendPercent * 10) / 10,
-      peakHour,
-      isAccelerating: trend === 'increasing' && trendPercent > 20,
-    };
-  }
-
-  /**
    * Calculate prediction information with confidence levels
    */
   private calculatePredictionInfo(
@@ -936,30 +793,6 @@ export class CCUsageService {
     };
   }
 
-  /**
-   * Calculate average burn rate for a given dataset
-   */
-  private calculateAverageBurnRate(data: UsageDataItem[]): number {
-    if (data.length === 0) return 0;
-
-    const totalTokens = data.reduce((sum, item) => {
-      return (
-        sum + (item.inputTokens || 0) + (item.outputTokens || 0) + (item.cacheCreationTokens || 0)
-      );
-    }, 0);
-
-    const totalHours = data.length * 24; // Assuming daily data points
-    return totalHours > 0 ? Math.round(totalTokens / totalHours) : 0;
-  }
-
-  /**
-   * Calculate peak usage hour (simplified version)
-   */
-  private calculatePeakUsageHour(data: UsageDataItem[]): number {
-    // Simplified: assume afternoon hours are peak usage
-    // In a real implementation, this would analyze hourly usage patterns
-    return 14; // 2 PM
-  }
 
   /**
    * Get actual next reset time based on active session block end time
