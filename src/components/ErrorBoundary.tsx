@@ -1,4 +1,5 @@
 import React, { Component, type ErrorInfo, type ReactNode } from 'react';
+import { withTranslation, type WithTranslation } from 'react-i18next';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
@@ -9,7 +10,7 @@ interface ErrorBoundaryState {
   errorInfo?: ErrorInfo;
 }
 
-interface ErrorBoundaryProps {
+interface ErrorBoundaryProps extends WithTranslation {
   children: ReactNode;
 }
 
@@ -47,12 +48,12 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
               {/* Error Title */}
               <h2 className="text-white text-2xl font-bold mb-4 text-shadow">
-                Something went wrong
+                {this.props.t('errors.errorBoundaryTitle')}
               </h2>
 
               {/* Error Description */}
               <p className="text-white/80 text-base mb-6 leading-relaxed">
-                An unexpected error occurred in the application. This might be a temporary issue.
+                {this.props.t('errors.errorBoundaryMessage')}
               </p>
 
               {/* Error Details (in development) */}
@@ -76,7 +77,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                   onClick={this.handleReset}
                   className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg shadow-blue-500/20 transition-all duration-200 hover:scale-105"
                 >
-                  Try Again
+                  {this.props.t('common.tryAgain')}
                 </Button>
                 <Button
                   type="button"
@@ -84,17 +85,17 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                   variant="outline"
                   className="w-full border-white/20 bg-white/5 text-white hover:bg-white/10 hover:border-white/40 transition-all duration-200 hover:scale-105"
                 >
-                  Reload Application
+                  {this.props.t('header.quitApplication')}
                 </Button>
               </div>
 
               {/* Help Text */}
               <div className="mt-6 text-white/60 text-sm space-y-2">
-                <p>If this problem persists:</p>
+                <p>{this.props.t('errors.errorPersists')}</p>
                 <div className="flex flex-col space-y-1 text-xs">
-                  <span>• Try restarting the application</span>
-                  <span>• Check your Claude Code configuration</span>
-                  <span>• Contact support if needed</span>
+                  <span>• {this.props.t('errors.restartApp')}</span>
+                  <span>• {this.props.t('errors.checkConfig')}</span>
+                  <span>• {this.props.t('errors.contactSupport')}</span>
                 </div>
               </div>
 
@@ -127,3 +128,5 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     return this.props.children;
   }
 }
+
+export default withTranslation()(ErrorBoundary);

@@ -1,6 +1,9 @@
 import type React from 'react';
+import { useTranslation } from 'react-i18next';
 
 export const LoadingScreen: React.FC = () => {
+  const { t } = useTranslation();
+
   return (
     <div className="h-screen w-full gradient-bg flex items-center justify-center">
       <div className="glass-card p-8 text-center max-w-sm w-full glass-interactive">
@@ -37,7 +40,7 @@ export const LoadingScreen: React.FC = () => {
 
         {/* Loading Text */}
         <h2 className="text-white text-xl font-bold mb-3 text-shadow font-primary">CCSeva</h2>
-        <p className="text-white/80 text-sm mb-6 font-primary">Initializing usage tracking...</p>
+        <p className="text-white/80 text-sm mb-6 font-primary">{t('header.trackApiUsage')}...</p>
 
         {/* Loading Spinner */}
         <div className="flex justify-center mb-6">
@@ -51,7 +54,7 @@ export const LoadingScreen: React.FC = () => {
               className="w-2 h-2 rounded-full animate-pulse"
               style={{ backgroundColor: 'var(--color-success-light)' }}
             />
-            <span className="text-white/70 font-primary">Connecting to Claude Code...</span>
+            <span className="text-white/70 font-primary">{t('loading.connectingToClaude')}</span>
           </div>
           <div className="flex items-center space-x-3 text-sm">
             <div
@@ -61,7 +64,7 @@ export const LoadingScreen: React.FC = () => {
                 animationDelay: '0.2s',
               }}
             />
-            <span className="text-white/70 font-primary">Loading usage data...</span>
+            <span className="text-white/70 font-primary">{t('loading.loadingData')}</span>
           </div>
           <div className="flex items-center space-x-3 text-sm">
             <div
@@ -71,7 +74,7 @@ export const LoadingScreen: React.FC = () => {
                 animationDelay: '0.4s',
               }}
             />
-            <span className="text-white/70 font-primary">Preparing dashboard...</span>
+            <span className="text-white/70 font-primary">{t('loading.preparingDashboard')}</span>
           </div>
         </div>
 

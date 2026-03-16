@@ -1,10 +1,11 @@
 import { Camera } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Analytics } from './components/Analytics';
 import { Dashboard } from './components/Dashboard';
-import { ErrorBoundary } from './components/ErrorBoundary';
+import ErrorBoundary from './components/ErrorBoundary';
 import { LoadingScreen } from './components/LoadingScreen';
 import { NavigationTabs } from './components/NavigationTabs';
 import { SettingsPanel } from './components/SettingsPanel';
@@ -34,11 +35,13 @@ interface AppState {
     plan?: 'auto' | 'Pro' | 'Max5' | 'Max20' | 'Custom';
     customTokenLimit?: number;
     menuBarDisplayMode?: 'percentage' | 'cost' | 'alternate';
-    menuBarCostSource?: 'today' | 'sessionWindow';
+    menuBarCostDisplayMode?: 'today' | 'sessionWindow' | 'alternate';
+    language?: 'en' | 'zh';
   };
 }
 
 const App: React.FC = () => {
+  const { i18n, t } = useTranslation();
   const [state, setState] = useState<AppState>({
     currentView: 'dashboard',
     stats: null,
@@ -69,11 +72,16 @@ const App: React.FC = () => {
           ...settings,
         },
       }));
+
+      // 如果设置中包含语言选项，初始化 i18n 语言
+      if (settings.language) {
+        await i18n.changeLanguage(settings.language);
+      }
     } catch (error) {
       console.error('Error loading settings:', error);
       // Continue with default settings if loading fails
     }
-  }, []);
+  }, [i18n]);
 
   // Save settings to storage
   const saveSettings = useCallback(async (newSettings: Partial<AppState['preferences']>) => {
@@ -87,8 +95,8 @@ const App: React.FC = () => {
       console.error('Error saving settings:', error);
       addNotification({
         type: 'error',
-        title: 'Settings Save Failed',
-        message: 'Could not save settings to local storage',
+        title: t('errors.settingsSaveFailed'),
+        message: t('errors.couldNotSaveSettings'),
       });
     }
   }, []);
@@ -117,8 +125,8 @@ const App: React.FC = () => {
       if (!showLoading) {
         addNotification({
           type: 'success',
-          title: 'Data Refreshed',
-          message: 'Usage statistics updated successfully',
+          title: t('dashboard.dataRefreshed'),
+          message: t('dashboard.dataRefreshedDesc'),
         });
       }
     } catch (err) {
@@ -132,7 +140,7 @@ const App: React.FC = () => {
 
       addNotification({
         type: 'error',
-        title: 'Update Failed',
+        title: t('errors.refreshFailed'),
         message: errorMessage,
       });
     }
@@ -152,8 +160,8 @@ const App: React.FC = () => {
       setState((prev) => ({ ...prev, stats: data }));
       addNotification({
         type: 'success',
-        title: 'Data Refreshed',
-        message: 'Latest usage data loaded',
+        title: t('dashboard.dataRefreshed'),
+        message: t('dashboard.dataRefreshedDesc'),
       });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to refresh data';
@@ -162,7 +170,7 @@ const App: React.FC = () => {
 
       addNotification({
         type: 'error',
-        title: 'Refresh Failed',
+        title: t('dashboard.refreshFailed'),
         message: errorMessage,
       });
     }
@@ -178,24 +186,24 @@ const App: React.FC = () => {
       const result = await window.electronAPI.takeScreenshot();
 
       if (result.success) {
-        toast.success('Screenshot captured!', {
+        toast.success(t('screenshot.capturedTitle'), {
           description: result.message,
           duration: 4000,
         });
       } else {
-        toast.error('Screenshot failed', {
-          description: result.error || 'Unknown error occurred',
+        toast.error(t('screenshot.failedTitle'), {
+          description: result.error || t('errors.unknownError'),
           duration: 4000,
         });
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to take screenshot';
-      toast.error('Screenshot failed', {
+      const errorMessage = err instanceof Error ? err.message : t('screenshot.failedError');
+      toast.error(t('screenshot.failedTitle'), {
         description: errorMessage,
         duration: 4000,
       });
     }
-  }, []);
+  }, [t]);
 
   // Add notification with auto-dismiss
   const addNotification = (
@@ -228,16 +236,21 @@ const App: React.FC = () => {
 
   // Update preferences
   const updatePreferences = useCallback(
-    (newPreferences: Partial<AppState['preferences']>) => {
+    async (newPreferences: Partial<AppState['preferences']>) => {
       setState((prev) => ({
         ...prev,
         preferences: { ...prev.preferences, ...newPreferences },
       }));
 
+      // 如果更新的是语言设置，立即切换语言
+      if (newPreferences.language) {
+        await i18n.changeLanguage(newPreferences.language);
+      }
+
       // Save settings immediately when changed
       saveSettings(newPreferences);
     },
-    [saveSettings]
+    [i18n, saveSettings]
   );
 
   // Handle navigation
@@ -247,10 +260,9 @@ const App: React.FC = () => {
 
   // Setup auto-refresh and event listeners
   useEffect(() => {
-    // Load settings first, then usage stats
-    loadSettings().then(() => {
-      loadUsageStats();
-    });
+    // 并行加载 settings 和 usage stats，而不是串联加载
+    // 这样可以减少总的加载时间
+    Promise.all([loadSettings(), loadUsageStats(true)]);
 
     // Handle usage updates from main process
     const handleUsageUpdate = () => {
@@ -343,11 +355,13 @@ const App: React.FC = () => {
   };
 
   const formatTimeRemaining = (burnRate: number, tokensRemaining: number): string => {
-    if (burnRate <= 0) return 'Unlimited';
+    if (burnRate <= 0) return t('timeFormat.unlimited');
     const hoursRemaining = tokensRemaining / burnRate;
-    if (hoursRemaining < 1) return `${Math.round(hoursRemaining * 60)}m remaining`;
-    if (hoursRemaining < 24) return `${Math.round(hoursRemaining)}h remaining`;
-    return `${Math.round(hoursRemaining / 24)}d remaining`;
+    if (hoursRemaining < 1)
+      return `${Math.round(hoursRemaining * 60)}${t('timeFormat.minutesRemaining')}`;
+    if (hoursRemaining < 24)
+      return `${Math.round(hoursRemaining)}${t('timeFormat.hoursRemaining')}`;
+    return `${Math.round(hoursRemaining / 24)}${t('timeFormat.daysRemaining')}`;
   };
 
   // Render loading screen
@@ -380,13 +394,13 @@ const App: React.FC = () => {
                 />
               </svg>
             </div>
-            <h2 className="text-xl font-bold text-white mb-4">Connection Error</h2>
+            <h2 className="text-xl font-bold text-white mb-4">{t('header.connectionError')}</h2>
             <p className="text-neutral-300 mb-6">{state.error}</p>
             <Button
               onClick={() => loadUsageStats()}
               className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg shadow-blue-500/20 transition-all duration-200"
             >
-              Try Again
+              {t('common.tryAgain')}
             </Button>
           </div>
         </div>
@@ -436,7 +450,7 @@ const App: React.FC = () => {
                   </div>
                   <div>
                     <h1 className="text-lg font-bold text-gradient mb-1">CCSeva</h1>
-                    <p className="text-xs text-neutral-400">Track API usage</p>
+                    <p className="text-xs text-neutral-400">{t('header.trackApiUsage')}</p>
                   </div>
                 </div>
 
@@ -452,7 +466,7 @@ const App: React.FC = () => {
                     variant="ghost"
                     size="icon"
                     className="p-1 hover:bg-white/10 hover:scale-105 transition-all duration-200"
-                    title="Refresh Data (⌘R)"
+                    title={t('header.refreshData')}
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
@@ -469,7 +483,7 @@ const App: React.FC = () => {
                     variant="ghost"
                     size="icon"
                     className="p-1 hover:bg-white/10 hover:scale-105 transition-all duration-200"
-                    title="Take Screenshot (⌘⇧S)"
+                    title={t('header.takeScreenshot')}
                   >
                     <Camera className="w-4 h-4" />
                   </Button>
@@ -479,7 +493,7 @@ const App: React.FC = () => {
                     variant="ghost"
                     size="icon"
                     className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/10 hover:scale-105 transition-all duration-200"
-                    title="Quit Application (⌘Q)"
+                    title={t('header.quitApplication')}
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path

@@ -15,6 +15,8 @@ export interface ElectronAPI {
   removeUsageUpdatedListener: (callback: () => void) => void;
   loadSettings: () => Promise<any>;
   saveSettings: (settings: Record<string, unknown>) => Promise<{ success: boolean }>;
+  saveLanguage: (language: 'en' | 'zh') => Promise<void>;
+  loadLanguage: () => Promise<string>;
 }
 
 declare global {

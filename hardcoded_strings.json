@@ -1,0 +1,404 @@
+{
+  "metadata": {
+    "scanDate": "2025-10-28",
+    "totalItems": 40,
+    "status": "needs_translation",
+    "scope": "src/components"
+  },
+  "dashboard": {
+    "currentPlanLabel": {
+      "text": "Current Plan",
+      "line": 324,
+      "context": "Right panel card title",
+      "zh": "当前方案",
+      "priority": "high"
+    },
+    "dailyLimit": {
+      "text": "Daily Limit",
+      "line": 330,
+      "context": "Current plan card",
+      "zh": "每日限额",
+      "priority": "high"
+    },
+    "today": {
+      "text": "Today",
+      "line": 443,
+      "context": "Today's usage card title",
+      "zh": "今天",
+      "priority": "high"
+    },
+    "usageSummary": {
+      "text": "Usage Summary",
+      "line": 444,
+      "context": "Today's usage subtitle",
+      "zh": "使用摘要",
+      "priority": "high"
+    },
+    "tokens": {
+      "text": "Tokens",
+      "line": 450,
+      "context": "Today's usage list item",
+      "zh": "代币",
+      "priority": "high"
+    },
+    "cost": {
+      "text": "Cost",
+      "line": 456,
+      "context": "Today's usage list item",
+      "zh": "成本",
+      "priority": "high"
+    },
+    "thisWeek": {
+      "text": "This Week",
+      "line": 491,
+      "context": "Weekly stats card title",
+      "zh": "本周",
+      "priority": "high"
+    },
+    "sevenDaySummary": {
+      "text": "7-Day Summary",
+      "line": 492,
+      "context": "Weekly stats subtitle",
+      "zh": "7天摘要",
+      "priority": "high"
+    },
+    "totalCost": {
+      "text": "Total Cost",
+      "line": 498,
+      "context": "Weekly stats list item",
+      "zh": "总成本",
+      "priority": "high"
+    },
+    "totalTokens": {
+      "text": "Total Tokens",
+      "line": 504,
+      "context": "Weekly stats list item",
+      "zh": "总代币",
+      "priority": "high"
+    },
+    "avgDaily": {
+      "text": "Avg Daily",
+      "line": 510,
+      "context": "Weekly stats list item",
+      "zh": "平均每日",
+      "priority": "high"
+    },
+    "noModelDataAvailable": {
+      "text": "No model usage data available",
+      "line": 599,
+      "context": "Empty state text",
+      "zh": "无模型使用数据可用",
+      "priority": "high"
+    },
+    "tokensPerHour": {
+      "text": "Tokens/Hour",
+      "line": 373,
+      "context": "Burn rate label",
+      "zh": "代币/小时",
+      "priority": "medium"
+    },
+    "depletionTime": {
+      "text": "Depletion Time",
+      "line": 390,
+      "context": "Depletion time label",
+      "zh": "消耗时间",
+      "priority": "medium"
+    },
+    "highUsage": {
+      "text": "High Usage",
+      "line": 414,
+      "context": "Usage status badge",
+      "zh": "高使用量",
+      "priority": "medium"
+    },
+    "moderateUsage": {
+      "text": "Moderate Usage",
+      "line": 416,
+      "context": "Usage status badge",
+      "zh": "中等使用量",
+      "priority": "medium"
+    },
+    "normalUsage": {
+      "text": "Normal Usage",
+      "line": 417,
+      "context": "Usage status badge",
+      "zh": "正常使用量",
+      "priority": "medium"
+    },
+    "criticalUsageTooltip": {
+      "text": "🔴 Critical Usage",
+      "line": 266,
+      "context": "Tooltip title",
+      "zh": "🔴 严重使用情况",
+      "priority": "medium"
+    },
+    "warningLevelTooltip": {
+      "text": "🟡 Warning Level",
+      "line": 268,
+      "context": "Tooltip title",
+      "zh": "🟡 警告级别",
+      "priority": "medium"
+    },
+    "safeUsageTooltip": {
+      "text": "🟢 Safe Usage",
+      "line": 269,
+      "context": "Tooltip title",
+      "zh": "🟢 安全使用",
+      "priority": "medium"
+    },
+    "over90PercentTooltip": {
+      "text": "Over 90% of daily limit used",
+      "line": 273,
+      "context": "Critical status description",
+      "zh": "已使用90%以上的每日限额",
+      "priority": "medium"
+    },
+    "between70to90PercentTooltip": {
+      "text": "70-90% of daily limit used",
+      "line": 275,
+      "context": "Warning status description",
+      "zh": "已使用70-90%的每日限额",
+      "priority": "medium"
+    },
+    "below70PercentTooltip": {
+      "text": "Less than 70% of daily limit used",
+      "line": 276,
+      "context": "Safe status description",
+      "zh": "已使用少于70%的每日限额",
+      "priority": "medium"
+    },
+    "planDetectionInfo": {
+      "text": "Your detected Claude plan based on daily token limit:",
+      "line": 319,
+      "context": "Plan detection tooltip",
+      "zh": "根据每日代币限额检测到的Claude方案:",
+      "priority": "medium"
+    },
+    "burnRateDetail": {
+      "text": "Current burn rate - how fast you're consuming your daily token allowance",
+      "line": 378,
+      "context": "Burn rate detail tooltip",
+      "zh": "当前消耗率 - 您消耗每日代币额度的速度",
+      "priority": "medium"
+    },
+    "depletionTimeDetail": {
+      "text": "Estimated time until your daily token limit is reached at current usage rate",
+      "line": 395,
+      "context": "Depletion time detail tooltip",
+      "zh": "按当前使用率预计达到每日代币限额的时间",
+      "priority": "medium"
+    }
+  },
+  "liveMonitoring": {
+    "pageTitle": {
+      "text": "Live Monitoring",
+      "line": 209,
+      "context": "Page header",
+      "zh": "实时监控",
+      "priority": "high"
+    },
+    "pageSubtitle": {
+      "text": "Real-time terminal-style usage tracking",
+      "line": 210,
+      "context": "Page subtitle",
+      "zh": "实时终端风格使用追踪",
+      "priority": "high"
+    },
+    "liveFeed": {
+      "text": "Live Feed",
+      "line": 266,
+      "context": "Terminal section title",
+      "zh": "实时源",
+      "priority": "high"
+    },
+    "currentSession": {
+      "text": "Current Session",
+      "line": 314,
+      "context": "Session info card title",
+      "zh": "当前会话",
+      "priority": "high"
+    },
+    "forceRefresh": {
+      "text": "Force Refresh",
+      "line": 369,
+      "context": "Quick action button",
+      "zh": "强制刷新",
+      "priority": "high"
+    },
+    "checkpoint": {
+      "text": "Checkpoint",
+      "line": 378,
+      "context": "Quick action button",
+      "zh": "检查点",
+      "priority": "high"
+    },
+    "clearLogs": {
+      "text": "Clear Logs",
+      "line": 387,
+      "context": "Quick action button",
+      "zh": "清空日志",
+      "priority": "high"
+    },
+    "waitingForEvents": {
+      "text": "Waiting for events...",
+      "line": 293,
+      "context": "Empty logs state",
+      "zh": "等待事件...",
+      "priority": "medium"
+    },
+    "untilReset": {
+      "text": "until reset",
+      "line": 255,
+      "context": "Time progress card",
+      "zh": "直到重置",
+      "priority": "medium"
+    },
+    "dataRefreshed": {
+      "text": "Data refreshed",
+      "line": 162,
+      "context": "Log entry message",
+      "zh": "数据已刷新",
+      "priority": "medium"
+    },
+    "trend": {
+      "text": "Trend",
+      "line": 342,
+      "context": "Trend label",
+      "zh": "趋势",
+      "priority": "medium"
+    },
+    "confidence": {
+      "text": "Confidence",
+      "line": 352,
+      "context": "Prediction confidence label",
+      "zh": "置信度",
+      "priority": "medium"
+    }
+  },
+  "terminalView": {
+    "autoDetect": {
+      "text": "Auto-detect",
+      "line": 74,
+      "context": "Plan detection return value",
+      "zh": "自动检测",
+      "priority": "medium"
+    },
+    "noResetInfo": {
+      "text": "No reset info",
+      "line": 40,
+      "context": "Default text when reset info missing",
+      "zh": "无重置信息",
+      "priority": "medium"
+    },
+    "proTokenLimit": {
+      "text": "Claude Pro (7K)",
+      "line": 89,
+      "context": "Plan token limit label",
+      "zh": "Claude Pro (7K)",
+      "priority": "low"
+    },
+    "max5TokenLimit": {
+      "text": "Claude Max5 (35K)",
+      "line": 90,
+      "context": "Plan token limit label",
+      "zh": "Claude Max5 (35K)",
+      "priority": "low"
+    },
+    "max20TokenLimit": {
+      "text": "Claude Max20 (140K)",
+      "line": 91,
+      "context": "Plan token limit label",
+      "zh": "Claude Max20 (140K)",
+      "priority": "low"
+    },
+    "prompt": {
+      "text": "ccmonitor@terminal",
+      "line": 256,
+      "context": "Terminal prompt prefix",
+      "zh": "ccmonitor@terminal",
+      "priority": "low"
+    }
+  },
+  "analytics": {
+    "noDataAvailable": {
+      "text": "No data available",
+      "line": 544,
+      "context": "Chart empty state",
+      "zh": "无可用数据",
+      "priority": "medium"
+    },
+    "percentageUsage": {
+      "text": "% usage",
+      "line": 711,
+      "context": "Model usage percentage label",
+      "zh": "使用百分比",
+      "priority": "low"
+    },
+    "usage": {
+      "text": "usage",
+      "line": 711,
+      "context": "Generic usage label",
+      "zh": "使用量",
+      "priority": "low"
+    }
+  },
+  "settingsPanel": {
+    "detectedPlanLabel": {
+      "text": "Current detected plan:",
+      "line": 198,
+      "context": "Plan detection display label",
+      "zh": "当前检测方案:",
+      "priority": "low"
+    },
+    "tokensPerDayUnit": {
+      "text": "(tokens/day)",
+      "line": 200,
+      "context": "Plan limit unit",
+      "zh": "(代币/天)",
+      "priority": "low"
+    }
+  },
+  "app": {
+    "appName": {
+      "text": "CCSeva",
+      "line": 451,
+      "context": "Application title/brand name",
+      "zh": "CCSeva",
+      "priority": "low",
+      "note": "Brand name - consider keeping original"
+    }
+  },
+  "loadingScreen": {
+    "logoText": {
+      "text": "CC",
+      "line": 17,
+      "context": "Loading screen logo text",
+      "zh": "CC",
+      "priority": "low",
+      "note": "Brand initials - consider keeping original"
+    },
+    "appName": {
+      "text": "CCSeva",
+      "line": 42,
+      "context": "Loading screen app name",
+      "zh": "CCSeva",
+      "priority": "low",
+      "note": "Brand name - consider keeping original"
+    }
+  },
+  "summary": {
+    "totalItems": 40,
+    "highPriority": 12,
+    "mediumPriority": 22,
+    "lowPriority": 6,
+    "mostAffectedComponent": "Dashboard.tsx",
+    "affectedComponentCount": 7,
+    "estimatedTranslationTime": "2-3 hours",
+    "nextSteps": [
+      "Add translation keys to en.json and zh.json",
+      "Replace hardcoded strings with t() calls in components",
+      "Test language switching in application",
+      "Verify Chinese translation accuracy"
+    ]
+  }
+}

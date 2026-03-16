@@ -1,4 +1,5 @@
 import type React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
 
 type ViewType = 'dashboard' | 'live' | 'analytics' | 'terminal' | 'settings';
@@ -56,27 +57,27 @@ const SettingsIcon = () => (
 const tabs = [
   {
     id: 'dashboard' as ViewType,
-    name: 'Dashboard',
+    nameKey: 'navigation.dashboard',
     icon: DashboardIcon,
-    description: 'Overview and quick stats',
+    descriptionKey: 'navigation.dashboardDesc',
   },
   {
     id: 'analytics' as ViewType,
-    name: 'Analytics',
+    nameKey: 'navigation.analytics',
     icon: AnalyticsIcon,
-    description: 'Usage trends and insights',
+    descriptionKey: 'navigation.analyticsDesc',
   },
   {
     id: 'terminal' as ViewType,
-    name: 'Terminal',
+    nameKey: 'navigation.terminal',
     icon: TerminalIcon,
-    description: 'Terminal-style interface',
+    descriptionKey: 'navigation.terminalDesc',
   },
   {
     id: 'settings' as ViewType,
-    name: 'Settings',
+    nameKey: 'navigation.settings',
     icon: SettingsIcon,
-    description: 'Application settings',
+    descriptionKey: 'navigation.settingsDesc',
   },
 ];
 
@@ -85,6 +86,8 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({
   onNavigate,
   className = '',
 }) => {
+  const { t } = useTranslation();
+
   return (
     <Tabs
       value={currentView}
@@ -99,10 +102,10 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({
               key={tab.id}
               value={tab.id}
               className="flex items-center gap-2 justify-center min-w-0"
-              title={tab.description}
+              title={t(tab.descriptionKey)}
             >
               <IconComponent />
-              <span className="hidden sm:inline font-primary text-xs">{tab.name}</span>
+              <span className="hidden sm:inline font-primary text-xs">{t(tab.nameKey)}</span>
             </TabsTrigger>
           );
         })}

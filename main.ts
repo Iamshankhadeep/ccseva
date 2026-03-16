@@ -21,7 +21,7 @@ class CCSevaApp {
   private showPercentage = true;
   private cachedMenuBarData: any = null;
   private menuBarDisplayMode: 'percentage' | 'cost' | 'alternate' = 'alternate';
-  private menuBarCostSource: 'today' | 'sessionWindow' = 'today';
+  private menuBarCostDisplayMode: 'today' | 'sessionWindow' | 'alternate' = 'alternate';
 
   constructor() {
     this.usageService = CCUsageService.getInstance();
@@ -35,13 +35,13 @@ class CCSevaApp {
     // Load settings on startup
     const settings = await this.settingsService.loadSettings();
     this.menuBarDisplayMode = settings.menuBarDisplayMode || 'alternate';
-    this.menuBarCostSource = settings.menuBarCostSource || 'today';
+    this.menuBarCostDisplayMode = settings.menuBarCostDisplayMode || 'alternate';
 
     // Apply plan configuration to usage service
     this.usageService.updateConfiguration({
       plan: settings.plan,
       customTokenLimit: settings.customTokenLimit,
-      menuBarCostSource: settings.menuBarCostSource,
+      menuBarCostDisplayMode: settings.menuBarCostDisplayMode,
     });
 
     this.createTray();
@@ -217,18 +217,18 @@ class CCSevaApp {
     ipcMain.handle('save-settings', async (_, settings) => {
       try {
         await this.settingsService.saveSettings(settings);
-        
+
         // Propagate plan settings to usage service
         this.usageService.updateConfiguration({
           plan: settings.plan,
           customTokenLimit: settings.customTokenLimit,
-          menuBarCostSource: settings.menuBarCostSource,
+          menuBarCostDisplayMode: settings.menuBarCostDisplayMode,
         });
-        
+
         // Handle menu bar display mode change
         if (settings.menuBarDisplayMode && settings.menuBarDisplayMode !== this.menuBarDisplayMode) {
           this.menuBarDisplayMode = settings.menuBarDisplayMode;
-          
+
           // Stop or start display toggle based on mode
           if (this.menuBarDisplayMode === 'alternate') {
             if (!this.displayInterval) {
@@ -240,14 +240,14 @@ class CCSevaApp {
               this.displayInterval = null;
             }
           }
-          
+
           // Update display immediately
           this.updateTrayDisplay();
         }
 
-        // If cost source changed, refresh tray title to pick up new cost
-        if (settings.menuBarCostSource && settings.menuBarCostSource !== this.menuBarCostSource) {
-          this.menuBarCostSource = settings.menuBarCostSource;
+        // If cost display mode changed, refresh tray title to pick up new cost
+        if (settings.menuBarCostDisplayMode && settings.menuBarCostDisplayMode !== this.menuBarCostDisplayMode) {
+          this.menuBarCostDisplayMode = settings.menuBarCostDisplayMode;
           await this.updateTrayTitle();
         }
 

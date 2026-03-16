@@ -123,7 +123,7 @@ export interface UserConfiguration {
   };
   plan: 'Pro' | 'Max5' | 'Max20' | 'Custom' | 'auto'; // 'auto' for auto-detection
   customTokenLimit?: number; // for custom plans
-  menuBarCostSource?: 'today' | 'sessionWindow'; // basis for menu bar cost display
+  menuBarCostDisplayMode?: 'today' | 'sessionWindow' | 'alternate'; // how to display cost in menu bar: today, sessionWindow, or alternate every 3s
 }
 
 export interface SessionInfo {

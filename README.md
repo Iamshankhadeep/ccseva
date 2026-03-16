@@ -6,13 +6,15 @@
 [![Downloads](https://img.shields.io/github/downloads/Iamshankhadeep/ccseva/total.svg)](https://github.com/Iamshankhadeep/ccseva/releases)
 [![macOS](https://img.shields.io/badge/macOS-10.15%2B-blue)](https://github.com/Iamshankhadeep/ccseva)
 
+**Language**: [English](README.md) | [简体中文](README_zh.md)
+
 A beautiful macOS menu bar app for tracking your Claude Code usage in real-time. Monitor token consumption, costs, and usage patterns with an elegant interface.
 
 ## Screenshots
 
-![Dashboard](./screenshots/dashboard.png)
-![Analytics](./screenshots/analytics.png)
-![Terminal](./screenshots/terminal.png)
+<img src="./screenshots/en/dashboard.png" alt="Dashboard - English" width="80%" />
+<img src="./screenshots/en/analytics.png" alt="Analytics - English" width="80%" />
+<img src="./screenshots/en/terminal.png" alt="Terminal - English" width="80%" />
 
 ## Features
 
@@ -23,6 +25,7 @@ A beautiful macOS menu bar app for tracking your Claude Code usage in real-time.
 - **Smart notifications** - Alerts at 70% and 90% thresholds with cooldown
 - **Cost tracking** - Daily cost estimates and burn rate calculations
 - **Beautiful UI** - Gradient design with glass morphism effects
+- **Multi-language support** - English and Simplified Chinese (more languages coming)
 
 ## Installation
 
@@ -52,6 +55,14 @@ npm run electron-dev  # Hot reload development
 3. **Right-click** - Access refresh and quit options
 
 The app automatically detects your Claude Code configuration from `~/.claude` directory and updates every 30 seconds.
+
+## Internationalization (i18n)
+
+CCSeva supports multiple languages:
+- **English** - Default language
+- **Simplified Chinese (简体中文)** - Available in Settings
+
+Switch language in the app settings, and the interface will update immediately. The project is designed to make it easy to add more languages in the future.
 
 ## Requirements
 

@@ -8,7 +8,7 @@ export interface AppSettings {
   plan: 'auto' | 'Pro' | 'Max5' | 'Max20' | 'Custom';
   customTokenLimit?: number;
   menuBarDisplayMode: 'percentage' | 'cost' | 'alternate';
-  menuBarCostSource: 'today' | 'sessionWindow';
+  menuBarCostDisplayMode: 'today' | 'sessionWindow' | 'alternate';
 }
 
 export class SettingsService {
@@ -30,7 +30,7 @@ export class SettingsService {
       plan: 'auto',
       customTokenLimit: undefined,
       menuBarDisplayMode: 'alternate',
-      menuBarCostSource: 'today',
+      menuBarCostDisplayMode: 'alternate',
     };
 
     // Ensure settings directory exists

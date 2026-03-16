@@ -91,8 +91,9 @@ export class CCUsageService {
   // Custom token limit specified by the user when plan === 'Custom'
   private customTokenLimit: number | undefined = undefined;
   private detectedTokenLimit = 7000;
-  // Basis for cost shown in menu bar
-  private menuBarCostSource: 'today' | 'sessionWindow' = 'today';
+  // Cost display mode for menu bar: 'today' | 'sessionWindow' | 'alternate'
+  // When 'alternate', rotates between the two every 3 seconds
+  private menuBarCostDisplayMode: 'today' | 'sessionWindow' | 'alternate' = 'today';
 
   constructor() {
     this.resetTimeService = ResetTimeService.getInstance();
@@ -136,8 +137,8 @@ export class CCUsageService {
     if (config.customTokenLimit !== undefined) {
       this.customTokenLimit = config.customTokenLimit;
     }
-    if (config.menuBarCostSource !== undefined) {
-      this.menuBarCostSource = config.menuBarCostSource;
+    if (config.menuBarCostDisplayMode !== undefined) {
+      this.menuBarCostDisplayMode = config.menuBarCostDisplayMode;
     }
 
     // Clear cache to force recalculation with new config
@@ -519,12 +520,27 @@ export class CCUsageService {
     };
   }
 
+  /**
+   * Get the effective cost source based on current display mode
+   * If mode is 'alternate', rotate every 3 seconds between 'today' and 'sessionWindow'
+   */
+  private getEffectiveCostSource(): 'today' | 'sessionWindow' {
+    if (this.menuBarCostDisplayMode === 'alternate') {
+      // Rotate every 3 seconds: even cycle → 'today', odd cycle → 'sessionWindow'
+      const cycleTime = Math.floor(Date.now() / 3000);
+      return cycleTime % 2 === 0 ? 'today' : 'sessionWindow';
+    }
+    return this.menuBarCostDisplayMode;
+  }
+
   async getMenuBarData(): Promise<MenuBarData> {
     const stats = await this.getUsageStats();
 
-    // Determine cost based on configured source
+    // Determine cost based on configured display mode
+    const effectiveSource = this.getEffectiveCostSource();
     let cost = stats.today.totalCost;
-    if (this.menuBarCostSource === 'sessionWindow') {
+
+    if (effectiveSource === 'sessionWindow') {
       if (stats.sessionTracking?.activeWindow.totalCost !== undefined) {
         cost = stats.sessionTracking.activeWindow.totalCost;
       } else if (this.historicalBlocks && this.historicalBlocks.length > 0) {
@@ -1023,7 +1039,8 @@ export class CCUsageService {
     const stats = await this.getUsageStats();
 
     let cost = stats.today.totalCost;
-    if (this.menuBarCostSource === 'sessionWindow') {
+    const effectiveSource = this.getEffectiveCostSource();
+    if (effectiveSource === 'sessionWindow') {
       if (stats.sessionTracking?.activeWindow.totalCost !== undefined) {
         cost = stats.sessionTracking.activeWindow.totalCost;
       } else if (this.historicalBlocks && this.historicalBlocks.length > 0) {

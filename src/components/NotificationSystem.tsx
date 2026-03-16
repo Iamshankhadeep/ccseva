@@ -1,5 +1,6 @@
 import type React from 'react';
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Badge } from './ui/badge';
 
@@ -36,6 +37,8 @@ export const NotificationSystem: React.FC<NotificationSystemProps> = ({
   onRemove,
   enabled,
 }) => {
+  const { t } = useTranslation();
+
   // Process new notifications and show them via Sonner
   useEffect(() => {
     if (!enabled) return;
@@ -47,14 +50,14 @@ export const NotificationSystem: React.FC<NotificationSystemProps> = ({
         description: notification.message,
         duration: 5000,
         action: {
-          label: 'Dismiss',
+          label: t('notifications.dismiss'),
           onClick: () => onRemove(notification.id),
         },
         onDismiss: () => onRemove(notification.id),
         onAutoClose: () => onRemove(notification.id),
       });
     }
-  }, [notifications, enabled, onRemove]);
+  }, [notifications, enabled, onRemove, t]);
 
   if (!enabled) return null;
 
@@ -62,7 +65,7 @@ export const NotificationSystem: React.FC<NotificationSystemProps> = ({
   return notifications.length > 0 ? (
     <div className="fixed top-4 right-4 z-50 pointer-events-none">
       <Badge variant="destructive" className="animate-pulse pointer-events-auto">
-        {notifications.length} active
+        {notifications.length} {t('notifications.active')}
       </Badge>
     </div>
   ) : null;
