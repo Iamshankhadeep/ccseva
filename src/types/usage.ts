@@ -70,47 +70,6 @@ export interface UsageStats {
   tokensRemaining: number;
   percentageUsed: number;
   sessionTracking?: SessionTracking; // 5-hour rolling session tracking
-  // Enhanced features
-  enhancedResetInfo?: {
-    nextResetTime: string;
-    timeUntilReset: number;
-    resetType: 'interval' | 'monthly';
-    resetSchedule: number[];
-    formattedTimeUntilReset: string;
-    cycleProgress: number;
-    isInCriticalPeriod: boolean;
-  };
-  advancedBurnRate?: {
-    current: number;
-    hourly: number;
-    trend: {
-      direction: 'increasing' | 'decreasing' | 'stable';
-      percentage: number;
-    };
-    velocity: {
-      classification: 'slow' | 'normal' | 'fast' | 'very_fast';
-      emoji: string;
-    };
-    confidence: number;
-  };
-  planManager?: {
-    currentPlan: 'Pro' | 'Max5' | 'Max20' | 'Custom';
-    autoSwitchEnabled: boolean;
-    detectedPlan: 'Pro' | 'Max5' | 'Max20' | 'Custom';
-    confidence: number;
-    lastSwitch?: {
-      timestamp: string;
-      fromPlan: string;
-      toPlan: string;
-      trigger: string;
-    };
-  };
-  limitDetection?: {
-    detectedLimit: number;
-    confidence: number;
-    detectionMethod: string;
-    shouldUpdate: boolean;
-  };
 }
 
 export interface UserConfiguration {

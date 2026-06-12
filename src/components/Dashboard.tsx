@@ -1,4 +1,5 @@
 import type React from 'react';
+import { formatCurrency, formatNumber } from '../lib/utils';
 import type { UsageStats } from '../types/usage';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -20,11 +21,6 @@ const ModelUsageItem = ({
   index: number;
 }) => {
   const percentage = totalTokens > 0 ? (modelData.tokens / totalTokens) * 100 : 0;
-  const formatNumber = (num: number) => {
-    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-    return num.toLocaleString();
-  };
 
   const getModelColor = (index: number) => {
     return index === 0 ? 'bg-purple-500' : index === 1 ? 'bg-blue-500' : 'bg-green-500';
@@ -59,22 +55,6 @@ const ModelUsageItem = ({
       </div>
     </div>
   );
-};
-
-// Helper for formatting numbers and currency
-const formatNumber = (num: number) => {
-  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-  if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-  return num.toLocaleString();
-};
-
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
 };
 
 // Helper for getting status-related values
@@ -270,6 +250,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats, status }) => {
                         : status === 'warning'
                           ? '70-90% of daily limit used'
                           : 'Less than 70% of daily limit used'}
+                    </p>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div>
+                    <CircularProgressChart
+                      percentage={stats.resetInfo.percentUntilReset}
+                      label="Cycle"
+                      subtitle={`${stats.resetInfo.daysSinceReset}d elapsed`}
+                      emoji="⏱"
+                      isTime
+                    />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <div className="text-center">
+                    <p className="font-semibold">⏱ Billing Cycle</p>
+                    <p className="text-sm mt-1">
+                      {stats.resetInfo.daysSinceReset} of {stats.resetInfo.daysInCycle} days elapsed
                     </p>
                   </div>
                 </TooltipContent>
@@ -599,27 +600,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats, status }) => {
             </div>
           </CardContent>
         </Card>
-
-        {/* Quick Actions */}
-        {/* <div className="glass-card p-4">
-        <h3 className="text-lg font-bold text-white mb-4">Quick Actions</h3>
-        
-        <div className="grid grid-cols-2 gap-3">
-          <button className="btn btn-ghost flex items-center justify-center gap-2 py-3">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-            View Analytics
-          </button>
-          
-          <button className="btn btn-ghost flex items-center justify-center gap-2 py-3">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Export Data
-          </button>
-        </div>
-      </div> */}
       </div>
     </TooltipProvider>
   );

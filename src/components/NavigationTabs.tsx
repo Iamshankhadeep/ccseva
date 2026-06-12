@@ -20,6 +20,18 @@ const DashboardIcon = () => (
   </svg>
 );
 
+const LiveIcon = () => (
+  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <title>Live</title>
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={1.5}
+      d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+    />
+  </svg>
+);
+
 const AnalyticsIcon = () => (
   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <title>Analytics</title>
@@ -61,6 +73,12 @@ const tabs = [
     description: 'Overview and quick stats',
   },
   {
+    id: 'live' as ViewType,
+    name: 'Live',
+    icon: LiveIcon,
+    description: 'Real-time usage monitoring',
+  },
+  {
     id: 'analytics' as ViewType,
     name: 'Analytics',
     icon: AnalyticsIcon,
@@ -91,7 +109,7 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({
       onValueChange={(value) => onNavigate(value as ViewType)}
       className={`${className} w-full`}
     >
-      <TabsList className="grid w-full grid-cols-4 gap-1">
+      <TabsList className="grid w-full grid-cols-5 gap-1">
         {tabs.map((tab) => {
           const IconComponent = tab.icon;
           return (
