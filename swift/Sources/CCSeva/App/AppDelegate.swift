@@ -30,6 +30,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var popoverLastClosedAt: Date = .distantPast
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let fontCount = FiraCode.registerFonts()
+        FileHandle.standardError.write(
+            Data("[CCSeva] Registered \(fontCount) Fira Code font face(s)\n".utf8)
+        )
+
         let store = UsageStore()
         self.store = store
 
@@ -44,7 +49,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let popover = NSPopover()
         popover.behavior = .transient
-        popover.contentSize = NSSize(width: 420, height: 560)
+        popover.contentSize = NSSize(width: 600, height: 600)
         popover.contentViewController = NSHostingController(
             rootView: RootView().environmentObject(store)
         )

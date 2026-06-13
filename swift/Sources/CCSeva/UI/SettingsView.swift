@@ -1,56 +1,59 @@
 import SwiftUI
 
-/// Preferences tab. Writes through to ~/.ccseva/settings.json (shared with the
-/// Electron app; unknown keys are preserved).
+/// Preferences tab, warm-themed. Writes through to ~/.ccseva/settings.json
+/// (shared with the Electron app; unknown keys are preserved).
 struct SettingsView: View {
     @EnvironmentObject private var store: UsageStore
     @State private var customLimitText = ""
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(spacing: 16) {
                 planSection
                 menuBarSection
                 refreshSection
                 aboutSection
             }
-            .padding(14)
+            .padding(.bottom, 8)
         }
+        .tint(.claudePrimary)
         .onAppear {
             customLimitText = store.settings.customTokenLimit.map(String.init) ?? ""
         }
     }
 
     private var planSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SectionHeader(title: "Claude plan")
+        VStack(alignment: .leading, spacing: 10) {
+            SectionHeader(title: "Claude Plan")
             Picker("Plan", selection: planBinding) {
                 ForEach(AppSettings.Plan.allCases) { plan in
-                    Text(plan.displayName).tag(plan)
+                    Text(plan.displayName).font(.firaCode(11)).tag(plan)
                 }
             }
             .labelsHidden()
+            .font(.firaCode(11))
 
             if store.settings.plan == .custom {
                 HStack {
                     TextField("Custom token limit", text: $customLimitText)
                         .textFieldStyle(.roundedBorder)
-                        .frame(width: 140)
-                    Button("Apply") {
-                        applyCustomLimit()
-                    }
+                        .font(.firaCode(11))
+                        .frame(width: 160)
+                    Button("Apply") { applyCustomLimit() }
+                        .font(.firaCode(11))
                 }
             }
 
             Text("Used only for the local fallback estimate when the live limits endpoint is unavailable. Effective limit: \(Format.tokens(store.localTokenLimit)) tokens per 5h block.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .font(.firaCode(10))
+                .foregroundStyle(Color.neutral400)
         }
+        .warmCard()
     }
 
     private var menuBarSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SectionHeader(title: "Menu bar")
+        VStack(alignment: .leading, spacing: 10) {
+            SectionHeader(title: "Menu Bar")
             Picker("Display", selection: displayModeBinding) {
                 Text("Percentage").tag(AppSettings.MenuBarDisplayMode.percentage)
                 Text("Cost").tag(AppSettings.MenuBarDisplayMode.cost)
@@ -64,12 +67,14 @@ struct SettingsView: View {
                     Text("Today's cost").tag(AppSettings.CostSource.today)
                     Text("Session window").tag(AppSettings.CostSource.sessionWindow)
                 }
+                .font(.firaCode(11))
             }
         }
+        .warmCard()
     }
 
     private var refreshSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             SectionHeader(title: "Refresh")
             Picker("Fallback interval", selection: refreshIntervalBinding) {
                 Text("30 seconds").tag(30)
@@ -77,23 +82,26 @@ struct SettingsView: View {
                 Text("2 minutes").tag(120)
                 Text("5 minutes").tag(300)
             }
+            .font(.firaCode(11))
             Text("File changes under ~/.claude/projects refresh automatically (FSEvents). This interval is just the safety-net poll.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .font(.firaCode(10))
+                .foregroundStyle(Color.neutral400)
         }
+        .warmCard()
     }
 
     private var aboutSection: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             SectionHeader(title: "About")
             Text("Settings file: \(store.settingsFilePath)")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .font(.firaCode(10))
+                .foregroundStyle(Color.neutral400)
                 .textSelection(.enabled)
             Text("Limit gauges use Claude Code's unofficial OAuth usage endpoint; when unreachable, CCSeva falls back to local estimates from your transcripts.")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .font(.firaCode(10))
+                .foregroundStyle(Color.neutral500)
         }
+        .warmCard()
     }
 
     // MARK: - Bindings

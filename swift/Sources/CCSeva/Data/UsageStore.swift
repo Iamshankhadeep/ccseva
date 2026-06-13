@@ -291,3 +291,89 @@ final class UsageStore: ObservableObject {
         return String(format: "$%.2f", cost)
     }
 }
+
+// MARK: - UI-facing derived values
+//
+// Purely additive helpers consumed by the SwiftUI layer. The data layer above
+// is the source of truth; these only reshape it for presentation.
+extension UsageStore {
+    /// Local token-usage percentage of the active block vs the plan limit.
+    var localTokenPercentage: Double {
+        guard let block = snapshot?.activeBlock else { return 0 }
+        let limit = max(localTokenLimit, 1)
+        return min(100, Double(block.totalTokens) / Double(limit) * 100)
+    }
+
+    var tokenStatus: UsageStatus { UsageStatus(percentage: localTokenPercentage) }
+
+    /// Tokens used in the current active block (0 when idle).
+    var activeBlockTokens: Int { snapshot?.activeBlock?.totalTokens ?? 0 }
+
+    /// Tokens remaining in the active block before hitting the plan limit.
+    var tokensRemaining: Int { max(0, localTokenLimit - activeBlockTokens) }
+
+    /// Fraction (0...1) of the current 5-hour block that has elapsed.
+    var sessionElapsedFraction: Double {
+        guard let block = snapshot?.activeBlock else { return 0 }
+        let elapsed = Date().timeIntervalSince(block.startTime)
+        return min(1, max(0, elapsed / Aggregator.sessionDuration))
+    }
+
+    /// "Xh Ym left" for the active block, or nil when idle.
+    var sessionTimeLeft: String? {
+        guard let block = snapshot?.activeBlock else { return nil }
+        let remaining = block.endTime.timeIntervalSinceNow
+        guard remaining > 0 else { return "resetting…" }
+        return Format.duration(remaining)
+    }
+
+    /// Human label for the effective plan.
+    var planDisplayName: String {
+        switch settings.plan {
+        case .auto:
+            let limit = localTokenLimit
+            if limit <= 7_000 { return "Pro" }
+            if limit <= 35_000 { return "Max5" }
+            if limit <= 140_000 { return "Max20" }
+            return "Custom"
+        case .pro: return "Pro"
+        case .max5: return "Max5"
+        case .max20: return "Max20"
+        case .custom: return "Custom"
+        }
+    }
+
+    /// Burn rate in tokens/hour for the active block (0 when idle).
+    var burnRatePerHour: Int {
+        guard let rate = snapshot?.activeBlock?.burnRate else { return 0 }
+        return Int(rate.tokensPerMinute * 60)
+    }
+
+    /// Today's distinct model count.
+    var todayModelCount: Int {
+        guard let snap = snapshot else { return 0 }
+        let key = todayKeyFormatter.string(from: Date())
+        return snap.daily.first { $0.dateKey == key }?.modelCosts.count ?? 0
+    }
+
+    /// This-week (last 7 days) totals from the daily rollup.
+    var weekTotals: (cost: Double, tokens: Int) {
+        guard let snap = snapshot else { return (0, 0) }
+        let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        let recent = snap.daily.filter { $0.date >= cutoff }
+        return (recent.reduce(0) { $0 + $1.cost }, recent.reduce(0) { $0 + $1.tokens.total })
+    }
+
+    /// Per-model usage for the dashboard "Model Usage" card. The retained snapshot
+    /// does not keep raw entries, so this uses the 30-day model breakdown as the
+    /// closest available distribution (today-only per-model tokens are not stored).
+    var dashboardModelUsage: [ModelUsage] {
+        Array((snapshot?.modelBreakdown ?? []).prefix(5))
+    }
+
+    private var todayKeyFormatter: DateFormatter {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }
+}

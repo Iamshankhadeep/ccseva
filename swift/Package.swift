@@ -10,7 +10,8 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "CCSeva",
-            path: "Sources/CCSeva"
+            path: "Sources/CCSeva",
+            resources: [.process("Resources")]
         )
     ]
 )

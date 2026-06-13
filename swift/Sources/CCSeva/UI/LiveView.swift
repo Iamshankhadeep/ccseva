@@ -1,132 +1,160 @@
 import SwiftUI
 
-/// Live monitoring of the current 5-hour session block.
+/// Live monitoring of the current 5-hour session block, warm-themed.
 struct LiveView: View {
     @EnvironmentObject private var store: UsageStore
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(spacing: 16) {
                 if let block = store.snapshot?.activeBlock {
                     activeBlockSection(block)
                 } else {
-                    VStack(spacing: 8) {
-                        Image(systemName: "moon.zzz")
-                            .font(.system(size: 30))
-                            .foregroundStyle(.secondary)
-                        Text("No active session")
-                            .font(.headline)
-                        Text("A session block starts with your next Claude Code request.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 40)
+                    idleState
                 }
-
                 if let blocks = store.snapshot?.blocks, !blocks.isEmpty {
                     recentBlocksSection(blocks)
                 }
             }
-            .padding(14)
+            .padding(.bottom, 8)
         }
     }
 
+    private var idleState: some View {
+        VStack(spacing: 12) {
+            GradientIconTile(systemName: "moon.zzz", colors: GradientIconTile.fiveHour, size: 52)
+            Text("No active session")
+                .font(.firaCode(15, weight: .semibold))
+                .foregroundStyle(Color.neutral100)
+            Text("A session block starts with your next Claude Code request.")
+                .font(.firaCode(11))
+                .foregroundStyle(Color.neutral400)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 36)
+        .warmCard()
+    }
+
     private func activeBlockSection(_ block: SessionBlock) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "Active 5-hour block")
-
-            // Elapsed time within the 5h window.
-            let elapsed = Date().timeIntervalSince(block.startTime)
-            let fraction = min(1, max(0, elapsed / Aggregator.sessionDuration))
-            VStack(alignment: .leading, spacing: 4) {
-                ProgressView(value: fraction)
-                HStack {
-                    Text("Started \(Format.time(block.startTime))")
-                    Spacer()
-                    Text("Ends \(Format.time(block.endTime)) (\(Format.duration(block.endTime.timeIntervalSinceNow)) left)")
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                GradientIconTile(systemName: "waveform.path.ecg", colors: GradientIconTile.fiveHour)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Active 5-Hour Block")
+                        .font(.firaCode(15, weight: .bold))
+                        .foregroundStyle(Color.neutral100)
+                    Text("Started \(Format.time(block.startTime)) · Ends \(Format.time(block.endTime))")
+                        .font(.firaCode(10))
+                        .foregroundStyle(Color.neutral400)
                 }
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                Spacer()
             }
 
-            HStack(spacing: 8) {
-                StatCard(title: "Tokens", value: Format.tokens(block.totalTokens),
-                         subtitle: "\(block.entryCount) entries")
-                StatCard(title: "Cost", value: Format.cost(block.costUSD))
+            let fraction = store.sessionElapsedFraction
+            VStack(alignment: .leading, spacing: 6) {
+                ThemedProgressBar(value: fraction, tint: Gradients.timeRing, height: 8)
+                HStack {
+                    Text("\(Int(fraction * 100))% elapsed")
+                    Spacer()
+                    Text("\(Format.duration(block.endTime.timeIntervalSinceNow)) left")
+                }
+                .font(.firaCode(10))
+                .foregroundStyle(Color.neutral500)
             }
-            HStack(spacing: 8) {
-                StatCard(
-                    title: "Burn rate",
-                    value: block.burnRate.map { "\(Format.tokens(Int($0.tokensPerMinute)))/min" } ?? "—",
-                    subtitle: block.burnRate.map { "\(Format.cost($0.costPerHour))/hr" }
+
+            HStack(spacing: 12) {
+                miniStat("Tokens", Format.tokens(block.totalTokens), "\(block.entryCount) entries")
+                miniStat("Cost", Format.cost(block.costUSD), nil)
+                miniStat(
+                    "Burn Rate",
+                    block.burnRate.map { "\(Format.tokens(Int($0.tokensPerMinute)))/min" } ?? "--",
+                    block.burnRate.map { "\(Format.cost($0.costPerHour))/hr" }
                 )
-                StatCard(
-                    title: "Projected",
-                    value: block.projection(now: Date()).map { Format.tokens($0.projectedTotalTokens) } ?? "—",
-                    subtitle: block.projection(now: Date()).map { "≈ \(Format.cost($0.projectedCost)) by block end" }
+                miniStat(
+                    "Projected",
+                    block.projection(now: Date()).map { Format.tokens($0.projectedTotalTokens) } ?? "--",
+                    block.projection(now: Date()).map { "≈ \(Format.cost($0.projectedCost))" }
                 )
             }
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Token breakdown")
-                    .font(.caption.weight(.medium))
-                tokenRow("Input", block.tokens.input)
-                tokenRow("Output", block.tokens.output)
-                tokenRow("Cache write", block.tokens.cacheCreation)
-                tokenRow("Cache read", block.tokens.cacheRead)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Token Breakdown")
+                    .font(.firaCode(11, weight: .semibold))
+                    .foregroundStyle(Color.neutral300)
+                tokenRow("Input", block.tokens.input, Color(hex: 0x3B82F6))
+                tokenRow("Output", block.tokens.output, Color(hex: 0xA855F7))
+                tokenRow("Cache write", block.tokens.cacheCreation, Color(hex: 0x22C55E))
+                tokenRow("Cache read", block.tokens.cacheRead, Color(hex: 0xF59E0B))
             }
-            .padding(10)
-            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+            .padding(12)
+            .background(Color.neutral800.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
 
             if !block.models.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Models in this block")
-                        .font(.caption.weight(.medium))
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Models In This Block")
+                        .font(.firaCode(11, weight: .semibold))
+                        .foregroundStyle(Color.neutral300)
                     ForEach(block.models, id: \.self) { model in
-                        Text("• \(Format.shortModelName(model))")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 8) {
+                            Circle().fill(Color.claudePrimary).frame(width: 6, height: 6)
+                            Text(Format.shortModelName(model))
+                                .font(.firaCode(10))
+                                .foregroundStyle(Color.neutral400)
+                        }
                     }
                 }
             }
         }
+        .warmCard()
     }
 
-    private func tokenRow(_ label: String, _ count: Int) -> some View {
-        HStack {
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+    private func miniStat(_ label: String, _ value: String, _ sub: String?) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label).font(.firaCode(10)).foregroundStyle(Color.neutral400)
+            Text(value).font(.firaCode(14, weight: .bold)).foregroundStyle(Color.neutral100)
+                .lineLimit(1).minimumScaleFactor(0.7)
+            if let sub {
+                Text(sub).font(.firaCode(9)).foregroundStyle(Color.neutral500).lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(Color.neutral800.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func tokenRow(_ label: String, _ count: Int, _ dot: Color) -> some View {
+        HStack(spacing: 8) {
+            Circle().fill(dot).frame(width: 6, height: 6)
+            Text(label).font(.firaCode(10)).foregroundStyle(Color.neutral400)
             Spacer()
-            Text(Format.tokens(count))
-                .font(.caption2)
-                .monospacedDigit()
+            Text(Format.tokens(count)).font(.firaCode(10, weight: .medium)).foregroundStyle(Color.neutral100)
         }
     }
 
     private func recentBlocksSection(_ blocks: [SessionBlock]) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            SectionHeader(title: "Recent blocks")
+        VStack(alignment: .leading, spacing: 10) {
+            SectionHeader(title: "Recent Blocks")
             ForEach(blocks.suffix(6).reversed()) { block in
-                HStack {
+                HStack(spacing: 8) {
                     Circle()
-                        .fill(block.isActive ? Color.green : Color.secondary.opacity(0.4))
-                        .frame(width: 6, height: 6)
+                        .fill(block.isActive ? Color.safeFrom : Color.neutral600)
+                        .frame(width: 7, height: 7)
                     Text(block.startTime.formatted(date: .abbreviated, time: .shortened))
-                        .font(.caption2)
+                        .font(.firaCode(10))
+                        .foregroundStyle(Color.neutral300)
                     Spacer()
                     Text(Format.tokens(block.totalTokens))
-                        .font(.caption2)
-                        .monospacedDigit()
+                        .font(.firaCode(10, weight: .medium))
+                        .foregroundStyle(Color.neutral100)
                     Text(Format.cost(block.costUSD))
-                        .font(.caption2)
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
+                        .font(.firaCode(10))
+                        .foregroundStyle(Color.neutral400)
                         .frame(width: 56, alignment: .trailing)
                 }
                 .padding(.vertical, 2)
             }
         }
+        .warmCard()
     }
 }

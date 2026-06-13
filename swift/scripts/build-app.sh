@@ -5,13 +5,24 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 swift build -c release --arch arm64
-BIN_PATH="$(swift build -c release --arch arm64 --show-bin-path)/CCSeva"
+BIN_DIR="$(swift build -c release --arch arm64 --show-bin-path)"
+BIN_PATH="$BIN_DIR/CCSeva"
 
 APP="dist/CCSeva.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 cp "$BIN_PATH" "$APP/Contents/MacOS/CCSeva"
+
+# SwiftPM emits bundled resources (Fira Code fonts) into CCSeva_CCSeva.bundle next
+# to the binary. Bundle.module resolves it relative to the executable at runtime,
+# so it must sit in Contents/Resources alongside the app's other resources.
+RESOURCE_BUNDLE="$BIN_DIR/CCSeva_CCSeva.bundle"
+if [ -d "$RESOURCE_BUNDLE" ]; then
+	cp -R "$RESOURCE_BUNDLE" "$APP/Contents/Resources/"
+else
+	echo "WARNING: resource bundle not found at $RESOURCE_BUNDLE (fonts will not load)" >&2
+fi
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>

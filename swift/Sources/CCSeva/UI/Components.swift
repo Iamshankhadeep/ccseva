@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Circular utilization gauge with a reset countdown.
+/// Compact circular utilization gauge with a reset countdown (Limit Headroom).
 struct UtilizationRing: View {
     let label: String
     /// 0...100
@@ -8,45 +8,36 @@ struct UtilizationRing: View {
     let resetsAt: Date?
     let isLive: Bool
 
-    private var color: Color {
-        switch utilization {
-        case 90...: return .red
-        case 70..<90: return .orange
-        default: return .green
-        }
-    }
+    private var status: UsageStatus { UsageStatus(percentage: utilization) }
 
     var body: some View {
         VStack(spacing: 6) {
             ZStack {
                 Circle()
-                    .stroke(Color.secondary.opacity(0.2), lineWidth: 7)
+                    .stroke(Color.white.opacity(0.10), lineWidth: 6)
                 Circle()
                     .trim(from: 0, to: min(utilization, 100) / 100)
-                    .stroke(color, style: StrokeStyle(lineWidth: 7, lineCap: .round))
+                    .stroke(status.gradient, style: StrokeStyle(lineWidth: 6, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                 Text("\(Int(utilization.rounded()))%")
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
+                    .font(.firaCode(15, weight: .semibold))
+                    .foregroundStyle(Color.neutral100)
             }
-            .frame(width: 72, height: 72)
+            .frame(width: 70, height: 70)
 
             Text(label)
-                .font(.caption)
+                .font(.firaCode(10))
+                .foregroundStyle(Color.neutral400)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .frame(height: 26)
 
             Text(resetText)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .font(.firaCode(9))
+                .foregroundStyle(Color.neutral500)
 
-            Text(isLive ? "live" : "estimated")
-                .font(.system(size: 9, weight: .medium))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background((isLive ? Color.green : Color.orange).opacity(0.18), in: Capsule())
-                .foregroundStyle(isLive ? Color.green : Color.orange)
+            ThemedPill(text: isLive ? "live" : "estimated",
+                       color: isLive ? .safeFrom : .claudePrimary)
         }
         .frame(maxWidth: .infinity)
     }
@@ -59,56 +50,67 @@ struct UtilizationRing: View {
     }
 }
 
-/// Small labeled stat tile.
-struct StatCard: View {
-    let title: String
-    let value: String
-    var subtitle: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.system(.title3, design: .rounded).weight(.semibold))
-                .monospacedDigit()
-            if let subtitle {
-                Text(subtitle)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
-        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
-    }
-}
-
+/// Section title in the warm style.
 struct SectionHeader: View {
     let title: String
 
     var body: some View {
         Text(title)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
+            .font(.firaCode(11, weight: .semibold))
+            .tracking(0.8)
+            .foregroundStyle(Color.neutral400)
             .textCase(.uppercase)
             .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Right-aligned "value over label" figure used in strips and grids.
+struct StatFigure: View {
+    let value: String
+    let label: String
+    var alignment: HorizontalAlignment = .trailing
+
+    var body: some View {
+        VStack(alignment: alignment, spacing: 2) {
+            Text(value)
+                .font(.firaCode(13, weight: .bold))
+                .foregroundStyle(Color.neutral100)
+            Text(label)
+                .font(.firaCode(10))
+                .foregroundStyle(Color.neutral400)
+        }
+    }
+}
+
+/// Key/value row inside stat cards.
+struct StatRow: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(.firaCode(11))
+                .foregroundStyle(Color.neutral400)
+            Spacer()
+            Text(value)
+                .font(.firaCode(11, weight: .medium))
+                .foregroundStyle(Color.neutral100)
+        }
     }
 }
 
 /// Shown when ~/.claude has no parseable data.
 struct EmptyStateView: View {
     var body: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "tray")
-                .font(.system(size: 36))
-                .foregroundStyle(.secondary)
+        VStack(spacing: 12) {
+            GradientIconTile(systemName: "tray", colors: GradientIconTile.fiveHour, size: 56)
             Text("No Claude Code data found")
-                .font(.headline)
+                .font(.firaCode(15, weight: .semibold))
+                .foregroundStyle(Color.neutral100)
             Text("CCSeva reads transcripts from ~/.claude/projects.\nUse Claude Code at least once, then refresh.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.firaCode(11))
+                .foregroundStyle(Color.neutral400)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
