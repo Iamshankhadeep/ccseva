@@ -5,12 +5,15 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var store: UsageStore
     @State private var customLimitText = ""
+    @State private var launchAtLogin = false
+    @State private var launchAtLoginFailed = false
 
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
                 planSection
                 menuBarSection
+                startupSection
                 refreshSection
                 aboutSection
             }
@@ -19,6 +22,7 @@ struct SettingsView: View {
         .tint(.claudePrimary)
         .onAppear {
             customLimitText = store.settings.customTokenLimit.map(String.init) ?? ""
+            launchAtLogin = LaunchAtLogin.isEnabled
         }
     }
 
@@ -69,6 +73,26 @@ struct SettingsView: View {
                 }
                 .font(.firaCode(11))
             }
+        }
+        .warmCard()
+    }
+
+    private var startupSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionHeader(title: "Startup")
+            Toggle(isOn: launchAtLoginBinding) {
+                Text("Launch at login")
+                    .font(.firaCode(11))
+                    .foregroundStyle(Color.neutral100)
+            }
+            .toggleStyle(.switch)
+            .tint(.claudePrimary)
+
+            Text(launchAtLoginFailed
+                ? "Couldn't update the login item. Move CCSeva to /Applications and try again."
+                : "Start CCSeva automatically when you log in.")
+                .font(.firaCode(10))
+                .foregroundStyle(launchAtLoginFailed ? Color.warnFrom : Color.neutral400)
         }
         .warmCard()
     }
@@ -135,6 +159,18 @@ struct SettingsView: View {
                 var s = store.settings
                 s.menuBarCostSource = newValue
                 store.updateSettings(s)
+            }
+        )
+    }
+
+    private var launchAtLoginBinding: Binding<Bool> {
+        Binding(
+            get: { launchAtLogin },
+            set: { newValue in
+                let ok = LaunchAtLogin.setEnabled(newValue)
+                launchAtLoginFailed = !ok
+                // Reflect the OS's actual state if the change was rejected.
+                launchAtLogin = ok ? newValue : LaunchAtLogin.isEnabled
             }
         )
     }
