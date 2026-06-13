@@ -8,6 +8,8 @@
 
 A beautiful macOS menu bar app for tracking your Claude Code usage in real-time. Monitor token consumption, costs, and usage patterns with an elegant interface.
 
+> **New: native Swift app.** CCSeva is being rewritten as a lightweight native Swift menu bar app (no Electron, ~a few MB instead of hundreds, near-zero idle overhead). It parses `~/.claude` data directly, tracks 5-hour session blocks and weekly usage, and shows **real server-side limit gauges** (5-hour + weekly utilization with reset countdowns and predicted cutoff time). See [`swift/README.md`](swift/README.md) to build and try it. The Electron app remains fully supported in the meantime.
+
 ## Screenshots
 
 ![Dashboard](./screenshots/dashboard.png)
@@ -17,12 +19,16 @@ A beautiful macOS menu bar app for tracking your Claude Code usage in real-time.
 ## Features
 
 - **Real-time monitoring** - Live token usage tracking with 30-second updates
+- **5-hour session blocks** - Current block usage, burn rate, projection, and reset countdown
+- **Weekly usage** - Week-by-week token and cost history (Monday weeks, matching Claude's weekly limits)
 - **Menu bar integration** - Percentage indicator with color-coded status
 - **Smart plan detection** - Auto-detects Pro/Max5/Max20/Custom plans
-- **Usage analytics** - 7-day charts, model breakdowns, and trend analysis
+- **Usage analytics** - Daily charts, model breakdowns, and trend analysis
 - **Smart notifications** - Alerts at 70% and 90% thresholds with cooldown
 - **Cost tracking** - Daily cost estimates and burn rate calculations
 - **Beautiful UI** - Gradient design with glass morphism effects
+
+The native Swift app (in [`swift/`](swift/)) adds server-truth limit gauges: it reads the same OAuth usage endpoint Claude Code's `/usage` command uses, so the 5-hour and weekly percentages match what Anthropic actually enforces — including usage from other devices.
 
 ## Installation
 
