@@ -21,3 +21,14 @@ export function formatCurrency(amount: number): string {
     maximumFractionDigits: 2,
   }).format(amount);
 }
+
+export function formatDuration(milliseconds: number): string {
+  const safeMs = Math.max(0, milliseconds);
+  const hours = Math.floor(safeMs / (1000 * 60 * 60));
+  const minutes = Math.floor((safeMs % (1000 * 60 * 60)) / (1000 * 60));
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m`;
+}

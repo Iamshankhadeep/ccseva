@@ -8,6 +8,10 @@
     "dist/**/*",
     "node_modules/**/*"
   ],
+  "asarUnpack": [
+    "node_modules/ccusage/**",
+    "node_modules/@ccusage/**"
+  ],
   "mac": {
     "category": "public.app-category.developer-tools",
     "icon": "assets/icon.icns",

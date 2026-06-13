@@ -75,14 +75,4 @@ export class NotificationService {
       console.error('Error sending notification:', error);
     }
   }
-
-  // Send a daily summary notification
-  sendDailySummary(tokensUsed: number, cost: number): void {
-    if (!Notification.isSupported()) return;
-
-    const title = '📊 CCSeva: Daily Summary';
-    const body = `Today: ${tokensUsed.toLocaleString()} tokens used, $${cost.toFixed(3)} spent`;
-
-    this.sendNotification(title, body);
-  }
 }

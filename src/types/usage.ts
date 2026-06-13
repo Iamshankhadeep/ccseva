@@ -54,6 +54,40 @@ export interface ActualResetInfo {
   formattedTimeRemaining: string; // human-readable time remaining
 }
 
+export interface BlockBurnRate {
+  tokensPerMinute: number; // raw tokens per minute (includes cache reads)
+  tokensPerMinuteForIndicator: number; // weighted tokens per minute for display
+  costPerHour: number; // USD per hour at current rate
+}
+
+export interface BlockProjection {
+  totalTokens: number; // projected tokens at block end
+  totalCost: number; // projected cost at block end (USD)
+  remainingMinutes: number; // minutes until the block ends
+}
+
+export interface ActiveBlockInfo {
+  startTime: string; // ISO string of block start
+  endTime: string; // ISO string of block end (5-hour limit reset)
+  tokensUsed: number; // tokens consumed in the current block
+  costUSD: number; // cost of the current block
+  models: string[]; // models used in the current block
+  burnRate: BlockBurnRate | null; // precomputed burn rate from ccusage
+  projection: BlockProjection | null; // precomputed projection from ccusage
+}
+
+export interface WeeklyUsage {
+  weekStart: string; // YYYY-MM-DD of the week start (Monday)
+  totalTokens: number;
+  totalCost: number;
+  models: {
+    [key: string]: {
+      tokens: number;
+      cost: number;
+    };
+  };
+}
+
 export interface UsageStats {
   today: DailyUsage;
   thisWeek: DailyUsage[];
@@ -63,6 +97,7 @@ export interface UsageStats {
   prediction: PredictionInfo; // intelligent predictions
   resetInfo: ResetTimeInfo; // reset time tracking
   actualResetInfo?: ActualResetInfo; // actual reset time from session data
+  activeBlock?: ActiveBlockInfo | null; // current 5-hour session block
   predictedDepleted: string | null; // when tokens will run out (legacy)
   currentPlan: 'Pro' | 'Max5' | 'Max20' | 'Custom';
   tokenLimit: number;
@@ -70,6 +105,7 @@ export interface UsageStats {
   tokensRemaining: number;
   percentageUsed: number;
   sessionTracking?: SessionTracking; // 5-hour rolling session tracking
+  dataSource: 'live' | 'unavailable'; // 'unavailable' when the ccusage CLI could not be run
 }
 
 export interface UserConfiguration {
@@ -143,6 +179,7 @@ export interface MenuBarData {
   percentageUsed: number;
   status: 'safe' | 'warning' | 'critical';
   cost: number;
+  dataSource: 'live' | 'unavailable'; // 'unavailable' when the ccusage CLI could not be run
   timeUntilReset?: string; // formatted time until reset
   resetInfo?: ResetTimeInfo; // detailed reset information
   sessionTracking?: SessionTracking; // 5-hour rolling session tracking

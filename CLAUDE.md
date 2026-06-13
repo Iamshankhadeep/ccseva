@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-CCSeva is a macOS menu bar Electron application that monitors Claude Code usage in real-time. The app uses the `ccusage` npm package API to fetch token usage data and displays it through a modern React-based UI with tabbed navigation, analytics, notifications, and visualizations.
+CCSeva is a macOS menu bar Electron application that monitors Claude Code usage in real-time. The app spawns the `ccusage` CLI (v20+, a native Rust binary shipped via npm) with `--json` output to fetch token usage data and displays it through a modern React-based UI with tabbed navigation, analytics, notifications, and visualizations.
 
 ## Essential Commands
 
@@ -51,7 +51,7 @@ The app follows standard Electron patterns with clear separation:
 ### Key Architectural Components
 
 #### Service Layer (Singleton Pattern)
-- **CCUsageService**: Uses the `ccusage` npm package data-loader API to fetch usage data, implementing a 30-second cache. Now supports plan configuration and actual session-based reset times.
+- **CCUsageService**: Spawns the `ccusage` CLI (native binary resolved from the `@ccusage/ccusage-<platform>-<arch>` optional dependencies) and parses its `--json` output, implementing a 3-second cache for stats and a 60-second cache for weekly data. Supports plan configuration and actual session-based reset times.
 - **SettingsService**: Manages user preferences persistence to `~/.ccseva/settings.json` including plan selection, custom token limits, timezone, and reset hour settings
 - **NotificationService**: Manages macOS notifications with cooldown periods and threshold detection
 - **ResetTimeService**: Handles Claude usage reset time calculations and timezone management
@@ -59,8 +59,8 @@ The app follows standard Electron patterns with clear separation:
 
 #### Data Flow
 1. Main process polls CCUsageService every 30 seconds
-2. Service imports `loadSessionBlockData` and `loadDailyUsageData` from `ccusage/data-loader` to fetch usage data
-3. The returned JavaScript objects are mapped to typed interfaces (`UsageStats`, `MenuBarData`)
+2. Service executes `ccusage claude blocks|daily|weekly --json --mode calculate --offline` via `execFile` (30s timeout, 50MB max buffer)
+3. The parsed JSON output is mapped to typed interfaces (`UsageStats`, `MenuBarData`, `WeeklyUsage`)
 4. Menu bar updates with percentage display, renderer receives data via IPC
 5. React app renders tabbed interface with dashboard, analytics, and live monitoring views
 6. NotificationService triggers alerts based on usage thresholds and patterns
@@ -92,7 +92,7 @@ webpack --mode production && tsc main.ts preload.ts --outDir dist
 ```
 
 #### Critical Path Dependencies
-- **ccusage npm package**: Direct dependency providing data-loader API functions
+- **ccusage npm package (v20+)**: Direct dependency; ships a CLI launcher plus platform-specific native binaries as optional dependencies (`@ccusage/ccusage-darwin-arm64`, etc.). The JavaScript library API was removed in ccusage v19
 - **Tailwind CSS v3**: PostCSS processing with custom gradient themes
 - **React 19**: Uses new JSX transform (`react-jsx`)
 - **Radix UI**: Component library for accessible UI primitives
@@ -102,6 +102,7 @@ webpack --mode production && tsc main.ts preload.ts --outDir dist
 
 Main process exposes these handlers:
 - `get-usage-stats`: Returns full UsageStats object
+- `get-weekly-usage`: Returns WeeklyUsage[] (weeks start Monday, matching Claude's weekly reset)
 - `refresh-data`: Forces cache refresh and returns fresh data
 - `usage-updated`: Event emitted to renderer every 30 seconds
 
@@ -151,8 +152,8 @@ Implements intelligent notification logic:
 
 ## Required External Dependencies
 
-- **`ccusage` npm package**: This is a direct dependency managed in `package.json`.
-- **Claude Code**: Must be configured with valid credentials in `~/.claude` directory containing JSONL usage files, which the `ccusage` package uses as its data source.
+- **`ccusage` npm package (v20+)**: Direct dependency managed in `package.json`; installs platform-specific native binaries through optional dependencies.
+- **Claude Code**: Must be configured with valid credentials in `~/.claude` directory containing JSONL usage files, which the `ccusage` CLI uses as its data source.
 - **macOS**: Tray and notification APIs are platform-specific
 
 ## Code Quality and Development Workflow
@@ -166,17 +167,26 @@ The project uses Biome for linting and formatting with these key settings:
 
 ### ccusage Integration Best Practices
 
-When using the `ccusage` package data-loader API:
+When integrating with the `ccusage` CLI (v20+):
 
-1. **Use data-loader functions**: Import `loadSessionBlockData` and `loadDailyUsageData` from `ccusage/data-loader`
-2. **Handle structured data**: The API returns typed JavaScript objects, no JSON parsing needed
-3. **Separate data calls**: Make separate API calls for session and daily data to optimize performance
-4. **Robust error handling**: Implement `try/catch` blocks around API calls to handle missing `~/.claude` configuration
-5. **Caching strategy**: Implement 30-second caching to avoid excessive file system reads
+1. **Use the `claude` subcommand**: Run `ccusage claude blocks|daily|weekly` — the top-level commands aggregate other coding agents too (Codex, Gemini, etc.), which would inflate numbers
+2. **Always pass `--json --mode calculate --offline`**: JSON output, costs calculated from tokens, and embedded pricing data (no network calls)
+3. **Resolve the native binary first**: Look up `@ccusage/ccusage-<platform>-<arch>/bin/ccusage` via `require.resolve`; fall back to running `ccusage/dist/cli.js` with `process.execPath` and `ELECTRON_RUN_AS_NODE=1`
+4. **Note the blocks `entries` field is a count**: It is a number of usage entries, not an array — per-entry data is not available; use block-level `burnRate` and `projection` (precomputed by the CLI) instead
+5. **Robust error handling**: Wrap CLI calls in `try/catch` to handle missing `~/.claude` configuration or a missing binary
+6. **Caching strategy**: Keep the 3-second stats cache (60 seconds for weekly data) to avoid excessive CLI spawns
+7. **Packaging**: `electron-builder.json` must `asarUnpack` `node_modules/ccusage/**` and `node_modules/@ccusage/**` so the binary is spawnable from packaged builds
 
 ## Recent Updates and Improvements
 
-### Settings Management & Plan Selection (Latest)
+### ccusage v20 CLI Migration + Weekly & 5-Hour Block Features (Latest)
+- **Upgraded ccusage 18.0.8 → 20.0.11**: ccusage v19 removed the JavaScript library API and v20 is a Rust rewrite; `CCUsageService` now spawns the native CLI binary and parses `--json` output instead of importing `ccusage/data-loader`
+- **Native binary resolution**: Per-platform lookup of `@ccusage/ccusage-<platform>-<arch>` with a `cli.js` + `ELECTRON_RUN_AS_NODE` fallback and asar-unpacked path handling for packaged builds
+- **5-hour block view**: New `activeBlock` field on `UsageStats` (start/end times, tokens, cost, CLI-precomputed burn rate and projection); surfaced as a detailed card in LiveMonitoring and a compact strip on the Dashboard with a "Resets in Xh Ym" countdown
+- **Weekly usage view**: New `getWeeklyUsage()` service method and `get-weekly-usage` IPC channel backed by `ccusage claude weekly --start-of-week monday`; Analytics shows the last 8 weeks (tokens + cost) with the current week highlighted
+- **Peak hour rework**: The v20 CLI reports `entries` as a count (not an array), so peak hour is now estimated by distributing block tokens proportionally across the hours each block was active
+
+### Settings Management & Plan Selection
 - **Claude Plan Settings**: Added comprehensive plan selection in SettingsPanel with Auto-detect, Pro, Max5, Max20, and Custom options
 - **Persistent Settings**: Extended SettingsService to save plan preferences to `~/.ccseva/settings.json` with backward compatibility
 - **Custom Token Limits**: Custom plan option allows users to set non-standard token limits with validation
@@ -194,11 +204,10 @@ When using the `ccusage` package data-loader API:
 - **Data Validation**: Added checks for both `totalTokens > 0 AND totalCost > 0` to prevent division by zero
 - **Accurate Pricing**: Formula `(totalCost / totalTokens) * 1000` now properly validated for real-world cost accuracy
 
-### ccusage Integration Refactor
-- **Switched from CLI to API**: Refactored `CCUsageService` to use the `ccusage` npm package directly, replacing `child_process` calls.
-- **Simplified data fetching**: API calls (`loadSessionBlockData`, `loadDailyUsageData`) now return structured JS objects, removing the need for manual JSON parsing and field name mapping.
-- **Improved reliability**: Direct API integration is more robust and less prone to issues from shell environment differences.
-- **Dependency management**: `ccusage` is now a formal npm dependency in `package.json`, ensuring version consistency.
+### ccusage Integration History
+- The service originally shelled out to a globally installed `ccusage` CLI, then moved to the package's `data-loader` JS API (v17/v18).
+- With ccusage v19/v20 the JS API was removed, so the integration moved back to spawning the (now native, npm-bundled) CLI with `--json` output — see "ccusage v20 CLI Migration" above.
+- `ccusage` remains a formal npm dependency in `package.json`, ensuring version consistency.
 
 ### Current Project Structure
 ```
@@ -219,7 +228,7 @@ ccseva/
 │   │   ├── ErrorBoundary.tsx   # Error handling
 │   │   └── ui/                 # Radix UI components
 │   ├── services/               # Business logic services
-│   │   ├── ccusageService.ts   # ccusage data-loader integration
+│   │   ├── ccusageService.ts   # ccusage CLI (--json) integration
 │   │   ├── settingsService.ts  # User preferences persistence
 │   │   ├── notificationService.ts # macOS notification management
 │   │   ├── resetTimeService.ts # Reset time calculations
@@ -258,24 +267,26 @@ Since there are no automated tests, manual verification checklist:
 6. Error boundaries handle failures gracefully
 
 ### Data Integration
-7. **ccusage data-loader integration**: Verify correct import and usage of data-loader functions
-8. **Data consistency**: Ensure displayed data matches `ccusage` output
+7. **ccusage CLI integration**: Verify the native binary resolves and `ccusage claude blocks/daily/weekly --json` calls succeed
+8. **Data consistency**: Ensure displayed data matches `ccusage` CLI output
 9. **Actual reset time accuracy**: Verify session-based reset times from active blocks
 10. **Session tracking**: Confirm session data persistence and analytics
 11. **Settings persistence**: Confirm plan and preference settings save to `~/.ccseva/settings.json`
+12. **5-hour block view**: LiveMonitoring and Dashboard show current block tokens, burn rate, projection, and reset countdown
+13. **Weekly view**: Analytics lists recent weeks (Monday start) with tokens/cost and highlights the current week
 
 ### Plan Management & Settings
-12. **Plan selection**: Test Auto-detect, Pro, Max5, Max20, and Custom plan options in SettingsPanel
-13. **Custom token limits**: Verify custom plan allows setting and validation of non-standard limits
-14. **Real-time updates**: Confirm plan changes immediately update Dashboard and TerminalView displays
-15. **Settings persistence**: Verify settings survive app restarts and maintain backward compatibility
+14. **Plan selection**: Test Auto-detect, Pro, Max5, Max20, and Custom plan options in SettingsPanel
+15. **Custom token limits**: Verify custom plan allows setting and validation of non-standard limits
+16. **Real-time updates**: Confirm plan changes immediately update Dashboard and TerminalView displays
+17. **Settings persistence**: Verify settings survive app restarts and maintain backward compatibility
 
 ### UI/UX Features
-16. **Toast notifications**: In-app notifications work properly
-17. **macOS notifications**: System alerts appear at thresholds
-18. **Real-time countdown**: SettingsPanel shows live "X hours Y minutes left" updating every minute
-19. **Plan display consistency**: TerminalView shows selected plan settings (not just auto-detected)
-20. **Cost calculation accuracy**: Analytics shows correct average cost per 1000 tokens
-21. **Theme consistency**: Tailwind styling renders correctly
-22. **Responsive design**: Interface adapts to different window sizes
-23. **Component interactions**: All Radix UI components function properly
+18. **Toast notifications**: In-app notifications work properly
+19. **macOS notifications**: System alerts appear at thresholds
+20. **Real-time countdown**: SettingsPanel shows live "X hours Y minutes left" updating every minute
+21. **Plan display consistency**: TerminalView shows selected plan settings (not just auto-detected)
+22. **Cost calculation accuracy**: Analytics shows correct average cost per 1000 tokens
+23. **Theme consistency**: Tailwind styling renders correctly
+24. **Responsive design**: Interface adapts to different window sizes
+25. **Component interactions**: All Radix UI components function properly

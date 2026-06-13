@@ -1,7 +1,7 @@
 import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { formatNumber } from '../lib/utils';
-import type { UsageStats } from '../types/usage';
+import { formatCurrency as formatCurrencyCompact, formatNumber } from '../lib/utils';
+import type { UsageStats, WeeklyUsage } from '../types/usage';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
@@ -45,6 +45,111 @@ const getDepletionText = (stats: UsageStats) => {
   } catch {
     return 'No depletion';
   }
+};
+
+// Get the Monday of the current week as YYYY-MM-DD (local time)
+const getCurrentWeekStart = (): string => {
+  const now = new Date();
+  const daysSinceMonday = (now.getDay() + 6) % 7;
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysSinceMonday);
+  const month = `${monday.getMonth() + 1}`.padStart(2, '0');
+  const day = `${monday.getDate()}`.padStart(2, '0');
+  return `${monday.getFullYear()}-${month}-${day}`;
+};
+
+// Format a week start date as a "Jun 8 – Jun 14" range label
+const formatWeekRange = (weekStart: string): string => {
+  const [year, month, day] = weekStart.split('-').map(Number);
+  const start = new Date(year, month - 1, day);
+  const end = new Date(year, month - 1, day + 6);
+  const label = (date: Date) =>
+    date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return `${label(start)} – ${label(end)}`;
+};
+
+// Weekly usage breakdown (Claude's weekly limit resets Monday)
+const WeeklyUsageCard: React.FC<{ weeks: WeeklyUsage[] | null }> = ({ weeks }) => {
+  const currentWeekStart = getCurrentWeekStart();
+  const recentWeeks = (weeks ?? []).slice(-8);
+  const maxTokens = Math.max(1, ...recentWeeks.map((week) => week.totalTokens));
+
+  return (
+    <Card className="bg-neutral-900/80 backdrop-blur-sm border-neutral-800">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-white">Weekly Usage</CardTitle>
+            <CardDescription>Tokens and cost per week • week resets Monday</CardDescription>
+          </div>
+
+          <div className="bg-neutral-800/50 px-3 py-1 rounded-lg border border-neutral-700">
+            <span className="text-xs text-neutral-300">Last {recentWeeks.length} weeks</span>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {weeks === null ? (
+          <div className="text-center py-8 text-sm text-neutral-400">Loading weekly usage...</div>
+        ) : recentWeeks.length === 0 ? (
+          <div className="text-center py-8 text-sm text-neutral-400">
+            No weekly usage data available
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {recentWeeks.map((week) => {
+              const isCurrentWeek = week.weekStart === currentWeekStart;
+              const barWidth = (week.totalTokens / maxTokens) * 100;
+
+              return (
+                <div
+                  key={week.weekStart}
+                  className={`flex items-center gap-4 p-3 rounded-xl border transition-colors ${
+                    isCurrentWeek
+                      ? 'bg-blue-500/10 border-blue-500/40'
+                      : 'bg-neutral-800/50 border-neutral-700'
+                  }`}
+                >
+                  <div className="w-32 flex-shrink-0">
+                    <div className="text-sm font-medium text-white">
+                      {formatWeekRange(week.weekStart)}
+                    </div>
+                    {isCurrentWeek && (
+                      <div className="text-xs text-blue-300 font-medium">Current week</div>
+                    )}
+                  </div>
+
+                  <div className="flex-1">
+                    <div className="w-full bg-neutral-800 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full transition-all duration-700 ${
+                          isCurrentWeek ? 'bg-blue-500' : 'bg-neutral-500'
+                        }`}
+                        style={{ width: `${barWidth}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="w-20 text-right flex-shrink-0">
+                    <div className="text-sm font-bold text-white">
+                      {formatNumber(week.totalTokens)}
+                    </div>
+                    <div className="text-xs text-neutral-400">tokens</div>
+                  </div>
+
+                  <div className="w-20 text-right flex-shrink-0">
+                    <div className="text-sm font-bold text-white">
+                      {formatCurrencyCompact(week.totalCost)}
+                    </div>
+                    <div className="text-xs text-neutral-400">cost</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 };
 
 // Separate component for control tabs
@@ -542,7 +647,27 @@ export const Analytics: React.FC<AnalyticsProps> = ({ stats }) => {
   const [timeRange, setTimeRange] = useState<ChartTimeRange>('7d');
   const [chartType, setChartType] = useState<ChartType>('area');
   const [selectedMetric, setSelectedMetric] = useState<'tokens' | 'cost'>('tokens');
+  const [weeklyUsage, setWeeklyUsage] = useState<WeeklyUsage[] | null>(null);
   const { chartDimensions, chartContainerRef } = useChartDimensions();
+
+  // Load weekly usage once on mount; the data only changes day to day
+  useEffect(() => {
+    let cancelled = false;
+
+    window.electronAPI
+      ?.getWeeklyUsage()
+      .then((data) => {
+        if (!cancelled) setWeeklyUsage(data);
+      })
+      .catch((error) => {
+        console.error('Error loading weekly usage:', error);
+        if (!cancelled) setWeeklyUsage([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const chartData = useChartData(stats, timeRange);
   const modelBreakdownData = useModelBreakdownData(stats);
@@ -606,6 +731,9 @@ export const Analytics: React.FC<AnalyticsProps> = ({ stats }) => {
           chartDimensions={chartDimensions}
           chartContainerRef={chartContainerRef}
         />
+
+        {/* Weekly Usage */}
+        <WeeklyUsageCard weeks={weeklyUsage} />
 
         {/* Bottom Section - Model Distribution & Performance */}
         <div className="grid grid-cols-1 gap-4">

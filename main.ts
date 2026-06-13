@@ -6,6 +6,7 @@ import { BrowserWindow, Tray, app, ipcMain, nativeImage, screen } from 'electron
 import { CCUsageService } from './src/services/ccusageService.js';
 import { NotificationService } from './src/services/notificationService.js';
 import { SettingsService } from './src/services/settingsService.js';
+import type { MenuBarData } from './src/types/usage.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,7 +20,7 @@ class CCSevaApp {
   private updateInterval: NodeJS.Timeout | null = null;
   private displayInterval: NodeJS.Timeout | null = null;
   private showPercentage = true;
-  private cachedMenuBarData: any = null;
+  private cachedMenuBarData: MenuBarData | null = null;
   private menuBarDisplayMode: 'percentage' | 'cost' | 'alternate' = 'alternate';
   private menuBarCostSource: 'today' | 'sessionWindow' = 'today';
 
@@ -101,6 +102,12 @@ class CCSevaApp {
   private updateTrayDisplay() {
     if (!this.cachedMenuBarData) return;
 
+    // Usage data could not be fetched; show a placeholder instead of fake "0%"
+    if (this.cachedMenuBarData.dataSource === 'unavailable') {
+      this.tray?.setTitle('--');
+      return;
+    }
+
     switch (this.menuBarDisplayMode) {
       case 'percentage':
         const percentage = Math.round(this.cachedMenuBarData.percentageUsed);
@@ -174,6 +181,15 @@ class CCSevaApp {
         return await this.usageService.getUsageStats();
       } catch (error) {
         console.error('Error getting usage stats:', error);
+        throw error;
+      }
+    });
+
+    ipcMain.handle('get-weekly-usage', async () => {
+      try {
+        return await this.usageService.getWeeklyUsage();
+      } catch (error) {
+        console.error('Error getting weekly usage:', error);
         throw error;
       }
     });
