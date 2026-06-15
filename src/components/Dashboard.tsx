@@ -1,6 +1,7 @@
 import type React from 'react';
-import { formatCurrency, formatNumber } from '../lib/utils';
+import { formatCurrency, formatDuration, formatNumber } from '../lib/utils';
 import type { UsageStats } from '../types/usage';
+import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
@@ -200,17 +201,110 @@ const CircularProgressChart: React.FC<{
   </div>
 );
 
+// Compact summary of the current 5-hour usage block
+const FiveHourBlockStrip: React.FC<{ stats: UsageStats }> = ({ stats }) => {
+  const block = stats.activeBlock;
+
+  return (
+    <Card className="bg-neutral-900/80 backdrop-blur-sm border-neutral-800">
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 flex items-center justify-center shadow-lg">
+              <svg
+                className="w-5 h-5 text-white"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-neutral-100 font-primary">5-Hour Block</h3>
+              <p className="text-xs text-neutral-400 font-primary">
+                {block
+                  ? `Resets in ${formatDuration(new Date(block.endTime).getTime() - Date.now())}`
+                  : 'No active session'}
+              </p>
+            </div>
+          </div>
+
+          {block && (
+            <div className="flex items-center gap-6 text-right">
+              <div>
+                <div className="text-sm font-bold text-neutral-100 font-primary">
+                  {formatNumber(block.tokensUsed)}
+                </div>
+                <div className="text-xs text-neutral-400 font-primary">Tokens</div>
+              </div>
+              <div>
+                <div className="text-sm font-bold text-neutral-100 font-primary">
+                  {block.burnRate ? `${formatNumber(block.burnRate.tokensPerMinute)}/min` : '--'}
+                </div>
+                <div className="text-xs text-neutral-400 font-primary">Burn Rate</div>
+              </div>
+              <div>
+                <div className="text-sm font-bold text-neutral-100 font-primary">
+                  {block.projection ? formatCurrency(block.projection.totalCost) : '--'}
+                </div>
+                <div className="text-xs text-neutral-400 font-primary">Projected Cost</div>
+              </div>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+// Inline notice shown when usage data could not be fetched from the ccusage CLI
+const DataUnavailableNotice: React.FC<{ stats: UsageStats; onRefresh?: () => void }> = ({
+  stats,
+  onRefresh,
+}) =>
+  stats.dataSource !== 'unavailable' ? null : (
+    <Alert className="bg-neutral-900/80 backdrop-blur-sm border-orange-500/50">
+      <AlertTitle className="text-orange-300 font-primary">Usage data unavailable</AlertTitle>
+      <AlertDescription className="text-neutral-400 font-primary">
+        <p className="mb-3">
+          The ccusage CLI could not be run, so live usage data is not available. The values shown
+          below are placeholders, not real usage.
+        </p>
+        {onRefresh && (
+          <Button
+            onClick={onRefresh}
+            size="sm"
+            variant="outline"
+            className="border-orange-500/50 bg-transparent text-orange-300 hover:bg-orange-500/10 hover:text-orange-200"
+          >
+            Retry
+          </Button>
+        )}
+      </AlertDescription>
+    </Alert>
+  );
+
 interface DashboardProps {
   stats: UsageStats;
   status: 'safe' | 'warning' | 'critical';
+  onRefresh?: () => void;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ stats, status }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ stats, status, onRefresh }) => {
   const { getStatusColor, getStatusIcon } = getStatusHelpers(status);
 
   return (
     <TooltipProvider>
       <div className="space-y-4">
+        {/* Data Unavailable Notice */}
+        <DataUnavailableNotice stats={stats} onRefresh={onRefresh} />
+
         {/* Hero Section */}
         <Card className="bg-neutral-900/80 backdrop-blur-sm border-neutral-800">
           <CardContent className="p-6">
@@ -280,6 +374,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats, status }) => {
             <KeyMetricsRow stats={stats} />
           </CardContent>
         </Card>
+
+        {/* Current 5-Hour Block (compact) */}
+        <FiveHourBlockStrip stats={stats} />
 
         {/* Stats Grid */}
         <div className="grid grid-cols-2 gap-4">

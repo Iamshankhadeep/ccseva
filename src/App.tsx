@@ -505,7 +505,7 @@ const App: React.FC = () => {
             {/* Content */}
             <div className="space-y-3 pb-3">
               {state.currentView === 'dashboard' && (
-                <Dashboard stats={currentStats} status={usageStatus} />
+                <Dashboard stats={currentStats} status={usageStatus} onRefresh={refreshData} />
               )}
 
               {state.currentView === 'live' && (

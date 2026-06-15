@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 const electronAPI = {
   getUsageStats: () => ipcRenderer.invoke('get-usage-stats'),
+  getWeeklyUsage: () => ipcRenderer.invoke('get-weekly-usage'),
   refreshData: () => ipcRenderer.invoke('refresh-data'),
   quitApp: () => ipcRenderer.invoke('quit-app'),
   takeScreenshot: () => ipcRenderer.invoke('take-screenshot'),

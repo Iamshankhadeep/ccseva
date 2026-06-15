@@ -1,3 +1,6 @@
+import type { AppSettings } from '../services/settingsService';
+import type { UsageStats, WeeklyUsage } from './usage';
+
 export interface ScreenshotResult {
   success: boolean;
   filename?: string;
@@ -7,14 +10,15 @@ export interface ScreenshotResult {
 }
 
 export interface ElectronAPI {
-  getUsageStats: () => Promise<any>;
-  refreshData: () => Promise<any>;
+  getUsageStats: () => Promise<UsageStats>;
+  getWeeklyUsage: () => Promise<WeeklyUsage[]>;
+  refreshData: () => Promise<UsageStats>;
   quitApp: () => Promise<void>;
   takeScreenshot: () => Promise<ScreenshotResult>;
   onUsageUpdated: (callback: () => void) => void;
   removeUsageUpdatedListener: (callback: () => void) => void;
-  loadSettings: () => Promise<any>;
-  saveSettings: (settings: Record<string, unknown>) => Promise<{ success: boolean }>;
+  loadSettings: () => Promise<AppSettings>;
+  saveSettings: (settings: Partial<AppSettings>) => Promise<{ success: boolean }>;
 }
 
 declare global {

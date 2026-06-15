@@ -1,5 +1,6 @@
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { formatCurrency, formatDuration } from '../lib/utils';
 import type { UsageStats } from '../types/usage';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
@@ -100,6 +101,103 @@ const StatusCard: React.FC<{
     </CardContent>
   </Card>
 );
+
+// Card highlighting the current 5-hour usage block (Claude's rolling limit window)
+const FiveHourBlockCard: React.FC<{ stats: UsageStats }> = ({ stats }) => {
+  const block = stats.activeBlock;
+
+  if (!block) {
+    return (
+      <Card className="bg-neutral-900/80 backdrop-blur-sm border-neutral-800">
+        <CardHeader>
+          <CardTitle className="text-white">Current 5-Hour Block</CardTitle>
+          <CardDescription>Claude limits usage within rolling 5-hour blocks</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-6 text-sm text-neutral-400">
+            No active session — a new block starts with your next message
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const msUntilReset = new Date(block.endTime).getTime() - Date.now();
+  const limitPercentage =
+    stats.tokenLimit > 0 ? Math.min(100, (block.tokensUsed / stats.tokenLimit) * 100) : 0;
+  const status = getUsageStatus(limitPercentage);
+
+  return (
+    <Card className="bg-neutral-900/80 backdrop-blur-sm border-neutral-800">
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-bold text-white mb-1">Current 5-Hour Block</h3>
+            <p className="text-sm text-neutral-400">
+              Started{' '}
+              {new Date(block.startTime).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </p>
+          </div>
+
+          <div className="glass px-3 py-1 rounded-lg">
+            <span className="text-xs text-neutral-300">
+              ⏳ Resets in {formatDuration(msUntilReset)}
+            </span>
+          </div>
+        </div>
+
+        {/* Tokens vs plan limit */}
+        <div className="mb-4">
+          <div className="flex justify-between text-sm mb-2">
+            <span className="text-neutral-400">
+              {formatNumber(block.tokensUsed)} / {formatNumber(stats.tokenLimit)} tokens
+            </span>
+            <span className="text-neutral-300">
+              {getStatusEmoji(status)} {limitPercentage.toFixed(1)}% of plan limit
+            </span>
+          </div>
+          <div className="w-full bg-neutral-800 rounded-full h-3">
+            <div
+              className={`h-3 rounded-full bg-gradient-to-r ${getStatusColor(status)} transition-all duration-1000`}
+              style={{ width: `${limitPercentage}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="text-center">
+            <div className="text-xl font-bold text-white mb-1">
+              {block.burnRate ? formatNumber(block.burnRate.tokensPerMinute) : '--'}
+            </div>
+            <div className="text-xs text-neutral-400">Tokens/Min</div>
+          </div>
+
+          <div className="text-center">
+            <div className="text-xl font-bold text-white mb-1">{formatCurrency(block.costUSD)}</div>
+            <div className="text-xs text-neutral-400">Cost So Far</div>
+          </div>
+
+          <div className="text-center">
+            <div className="text-xl font-bold text-white mb-1">
+              {block.projection ? formatNumber(block.projection.totalTokens) : '--'}
+            </div>
+            <div className="text-xs text-neutral-400">Projected Tokens</div>
+          </div>
+
+          <div className="text-center">
+            <div className="text-xl font-bold text-white mb-1">
+              {block.projection ? formatCurrency(block.projection.totalCost) : '--'}
+            </div>
+            <div className="text-xs text-neutral-400">Projected Cost</div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
 
 interface LiveMonitoringProps {
   stats: UsageStats;
@@ -248,6 +346,9 @@ export const LiveMonitoring: React.FC<LiveMonitoringProps> = ({ stats, onRefresh
           </div>
         </CardContent>
       </Card>
+
+      {/* Current 5-Hour Block */}
+      <FiveHourBlockCard stats={stats} />
 
       {/* Terminal-style Output */}
       <Card className="bg-neutral-900/80 backdrop-blur-sm border-neutral-800">

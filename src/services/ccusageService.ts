@@ -1,6 +1,12 @@
-import { loadDailyUsageData, loadSessionBlockData } from 'ccusage/data-loader';
+import { execFile } from 'node:child_process';
+import * as fs from 'node:fs';
+import { createRequire } from 'node:module';
+import * as path from 'node:path';
+import { promisify } from 'node:util';
 import type {
-  ActualResetInfo,
+  ActiveBlockInfo,
+  BlockBurnRate,
+  BlockProjection,
   DailyUsage,
   MenuBarData,
   PredictionInfo,
@@ -8,11 +14,66 @@ import type {
   UsageStats,
   UserConfiguration,
   VelocityInfo,
+  WeeklyUsage,
 } from '../types/usage.js';
 import { ResetTimeService } from './resetTimeService.js';
 import { SessionTracker } from './sessionTracker.js';
 
-interface ModelBreakdown {
+const execFileAsync = promisify(execFile);
+const resolver = createRequire(import.meta.url);
+
+/** Map of platform-arch to the ccusage native binary package name. */
+const NATIVE_BINARY_PACKAGES: Record<string, string> = {
+  'darwin-arm64': '@ccusage/ccusage-darwin-arm64',
+  'darwin-x64': '@ccusage/ccusage-darwin-x64',
+  'linux-arm64': '@ccusage/ccusage-linux-arm64',
+  'linux-x64': '@ccusage/ccusage-linux-x64',
+  'win32-arm64': '@ccusage/ccusage-win32-arm64',
+  'win32-x64': '@ccusage/ccusage-win32-x64',
+};
+
+const CLI_TIMEOUT_MS = 30000;
+const CLI_MAX_BUFFER = 50 * 1024 * 1024; // 50MB; JSON output can be large
+
+interface CliCommand {
+  command: string;
+  baseArgs: string[];
+}
+
+/**
+ * Spawning binaries from inside an asar archive is not possible; electron-builder
+ * unpacks the ccusage packages (see asarUnpack), so point at the unpacked copy.
+ */
+function toSpawnablePath(resolvedPath: string): string {
+  return resolvedPath.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
+}
+
+// --- ccusage v20 CLI JSON shapes ---
+
+interface CliTokenCounts {
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationInputTokens: number;
+  cacheReadInputTokens: number;
+}
+
+interface CliBlock {
+  id: string;
+  startTime: string;
+  endTime: string;
+  actualEndTime: string | null;
+  isActive: boolean;
+  isGap: boolean;
+  entries: number; // count of usage entries in the block (not an array)
+  tokenCounts: CliTokenCounts;
+  totalTokens: number;
+  costUSD: number;
+  models: string[];
+  burnRate: BlockBurnRate | null;
+  projection: BlockProjection | null;
+}
+
+interface CliModelBreakdown {
   modelName: string;
   inputTokens: number;
   outputTokens: number;
@@ -21,48 +82,44 @@ interface ModelBreakdown {
   cost: number;
 }
 
-interface DailyDataEntry {
-  date: string;
+interface CliDailyEntry {
+  date: string; // YYYY-MM-DD
   inputTokens: number;
   outputTokens: number;
   cacheCreationTokens: number;
   cacheReadTokens: number;
   totalCost: number;
-  modelBreakdowns: ModelBreakdown[];
+  totalTokens: number;
+  modelsUsed: string[];
+  modelBreakdowns: CliModelBreakdown[];
 }
 
-// Define SessionBlock interface matching ccusage package structure
-interface LoadedUsageEntry {
-  timestamp: Date;
-  usage: {
-    inputTokens: number;
-    outputTokens: number;
-    cacheCreationInputTokens: number;
-    cacheReadInputTokens: number;
-  };
-  costUSD: number | null;
-  model: string;
-  version?: string;
-}
-
-interface TokenCounts {
+interface CliWeeklyEntry {
+  week: string; // YYYY-MM-DD of week start
   inputTokens: number;
   outputTokens: number;
-  cacheCreationInputTokens: number;
-  cacheReadInputTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+  totalCost: number;
+  totalTokens: number;
+  modelsUsed: string[];
+  modelBreakdowns: CliModelBreakdown[];
 }
 
+/** Session block with parsed dates, used internally for calculations. */
 interface SessionBlock {
   id: string;
   startTime: Date;
   endTime: Date;
   actualEndTime?: Date;
   isActive: boolean;
-  isGap?: boolean;
-  entries: LoadedUsageEntry[];
-  tokenCounts: TokenCounts;
+  isGap: boolean;
+  totalTokens: number;
+  tokenCounts: CliTokenCounts;
   costUSD: number;
   models: string[];
+  burnRate: BlockBurnRate | null;
+  projection: BlockProjection | null;
 }
 
 export class CCUsageService {
@@ -70,6 +127,10 @@ export class CCUsageService {
   private cachedStats: UsageStats | null = null;
   private lastUpdate = 0;
   private readonly CACHE_DURATION = 3000; // 3 seconds like Python script
+  private cachedWeekly: WeeklyUsage[] | null = null;
+  private lastWeeklyUpdate = 0;
+  private readonly WEEKLY_CACHE_DURATION = 60000; // weekly data changes slowly
+  private cliCommand: CliCommand | null = null;
   private resetTimeService: ResetTimeService;
   private sessionTracker: SessionTracker;
   private historicalBlocks: SessionBlock[] = []; // Store session blocks for analysis
@@ -80,7 +141,6 @@ export class CCUsageService {
   private currentPlan: 'Pro' | 'Max5' | 'Max20' | 'Custom' = 'Pro';
   // Custom token limit specified by the user when plan === 'Custom'
   private customTokenLimit: number | undefined = undefined;
-  private detectedTokenLimit = 7000;
   // Basis for cost shown in menu bar
   private menuBarCostSource: 'today' | 'sessionWindow' = 'today';
 
@@ -94,6 +154,97 @@ export class CCUsageService {
       CCUsageService.instance = new CCUsageService();
     }
     return CCUsageService.instance;
+  }
+
+  /**
+   * Resolve how to invoke the ccusage CLI.
+   * Prefers the platform-specific native binary; falls back to running the
+   * ccusage JS launcher with the current executable in Node mode.
+   */
+  private resolveCli(): CliCommand {
+    if (this.cliCommand) {
+      return this.cliCommand;
+    }
+
+    const packageName = NATIVE_BINARY_PACKAGES[`${process.platform}-${process.arch}`];
+    if (packageName) {
+      try {
+        const packageJsonPath = toSpawnablePath(resolver.resolve(`${packageName}/package.json`));
+        const binaryName = process.platform === 'win32' ? 'ccusage.exe' : 'ccusage';
+        const binaryPath = path.join(path.dirname(packageJsonPath), 'bin', binaryName);
+
+        if (fs.existsSync(binaryPath)) {
+          if (process.platform !== 'win32') {
+            try {
+              fs.accessSync(binaryPath, fs.constants.X_OK);
+            } catch {
+              fs.chmodSync(binaryPath, 0o755);
+            }
+          }
+          this.cliCommand = { command: binaryPath, baseArgs: [] };
+          return this.cliCommand;
+        }
+      } catch {
+        // Native package not installed; fall through to the JS launcher
+      }
+    }
+
+    // Fallback: run ccusage's cli.js launcher with the current executable.
+    // ELECTRON_RUN_AS_NODE makes Electron behave like plain Node.
+    const cliJsPath = toSpawnablePath(resolver.resolve('ccusage/dist/cli.js'));
+    this.cliCommand = { command: process.execPath, baseArgs: [cliJsPath] };
+    return this.cliCommand;
+  }
+
+  /**
+   * Execute a ccusage CLI subcommand and parse its JSON output.
+   * Always uses the `claude` subcommand so usage from other coding agents
+   * (Codex, Gemini, etc.) is not included.
+   */
+  private async runCli<T>(args: string[]): Promise<T> {
+    const { command, baseArgs } = this.resolveCli();
+    const { stdout } = await execFileAsync(
+      command,
+      [...baseArgs, 'claude', ...args, '--json', '--mode', 'calculate', '--offline'],
+      {
+        timeout: CLI_TIMEOUT_MS,
+        maxBuffer: CLI_MAX_BUFFER,
+        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', NO_COLOR: '1' },
+      }
+    );
+    return JSON.parse(stdout) as T;
+  }
+
+  private async fetchBlocks(): Promise<SessionBlock[]> {
+    const result = await this.runCli<{ blocks: CliBlock[] }>(['blocks', '--session-length', '5']);
+    return (result.blocks ?? []).map((block) => ({
+      id: block.id,
+      startTime: new Date(block.startTime),
+      endTime: new Date(block.endTime),
+      actualEndTime: block.actualEndTime ? new Date(block.actualEndTime) : undefined,
+      isActive: block.isActive,
+      isGap: block.isGap,
+      totalTokens: block.totalTokens,
+      tokenCounts: block.tokenCounts,
+      costUSD: block.costUSD,
+      models: block.models,
+      burnRate: block.burnRate,
+      projection: block.projection,
+    }));
+  }
+
+  private async fetchDaily(): Promise<CliDailyEntry[]> {
+    const result = await this.runCli<{ daily: CliDailyEntry[] }>(['daily']);
+    return result.daily ?? [];
+  }
+
+  private async fetchWeekly(): Promise<CliWeeklyEntry[]> {
+    const result = await this.runCli<{ weekly: CliWeeklyEntry[] }>([
+      'weekly',
+      '--start-of-week',
+      'monday',
+    ]);
+    return result.weekly ?? [];
   }
 
   private toISOStringLocal(date: Date): string {
@@ -144,19 +295,12 @@ export class CCUsageService {
 
     try {
       // Get both session blocks and daily data for complete information
-      const [blocks, dailyData] = await Promise.all([
-        loadSessionBlockData({
-          sessionDurationHours: 5, // Claude uses 5-hour sessions
-          mode: 'calculate', // Calculate costs from tokens for accuracy
-        }),
-        loadDailyUsageData({
-          mode: 'calculate', // Calculate costs from tokens
-        }),
-      ]);
+      const [blocks, dailyData] = await Promise.all([this.fetchBlocks(), this.fetchDaily()]);
 
-      if (!blocks || blocks.length === 0) {
+      if (blocks.length === 0) {
         console.error('No blocks data received');
-        return this.getMockStats();
+        this.currentActiveBlock = null;
+        return this.getDefaultStats();
       }
 
       const stats = this.parseBlocksData(blocks, dailyData);
@@ -169,8 +313,37 @@ export class CCUsageService {
     } catch (error) {
       console.error('Error fetching usage stats:', error);
 
-      // Return mock data for development/testing
-      return this.getMockStats();
+      // The ccusage CLI could not be run; return zeroed stats flagged as unavailable
+      return this.getUnavailableStats();
+    }
+  }
+
+  /**
+   * Get weekly usage aggregated by ccusage (weeks start Monday, matching
+   * Claude's weekly limit reset).
+   */
+  async getWeeklyUsage(): Promise<WeeklyUsage[]> {
+    const now = Date.now();
+
+    if (this.cachedWeekly && now - this.lastWeeklyUpdate < this.WEEKLY_CACHE_DURATION) {
+      return this.cachedWeekly;
+    }
+
+    try {
+      const weekly = await this.fetchWeekly();
+      const mapped = weekly.map((week) => ({
+        weekStart: week.week,
+        totalTokens: week.totalTokens,
+        totalCost: week.totalCost,
+        models: this.mapModelBreakdowns(week.modelBreakdowns),
+      }));
+
+      this.cachedWeekly = mapped;
+      this.lastWeeklyUpdate = now;
+      return mapped;
+    } catch (error) {
+      console.error('Error fetching weekly usage:', error);
+      return this.cachedWeekly ?? [];
     }
   }
 
@@ -208,9 +381,9 @@ export class CCUsageService {
   }
 
   /**
-   * Parse blocks data similar to Python implementation
+   * Build the full usage stats from session blocks and daily data
    */
-  private parseBlocksData(blocks: SessionBlock[], dailyData?: DailyDataEntry[]): UsageStats {
+  private parseBlocksData(blocks: SessionBlock[], dailyData: CliDailyEntry[]): UsageStats {
     // Find active block
     const activeBlock = blocks.find((block) => block.isActive && !block.isGap);
 
@@ -223,12 +396,11 @@ export class CCUsageService {
     this.currentActiveBlock = activeBlock;
 
     // Get tokens from active session
-    const tokensUsed = this.getTotalTokensFromBlock(activeBlock);
+    const tokensUsed = activeBlock.totalTokens;
 
     // Resolve plan and token limit based on user selection and detected usage
     const { plan, tokenLimit } = this.resolvePlan(blocks);
     this.currentPlan = plan;
-    this.detectedTokenLimit = tokenLimit;
 
     // Calculate burn rate from last hour across all sessions
     const burnRate = this.calculateHourlyBurnRate(blocks);
@@ -243,32 +415,13 @@ export class CCUsageService {
       this.convertSessionBlocksToCC(blocks)
     );
 
-    // Use daily data if provided, otherwise convert from blocks
-    let processedDailyData: DailyUsage[];
-    if (dailyData) {
-      // Process the daily data from ccusage, filtering out synthetic models
-      processedDailyData = dailyData.map((day) => ({
-        date: day.date,
-        totalTokens:
-          day.inputTokens + day.outputTokens + day.cacheCreationTokens + day.cacheReadTokens,
-        totalCost: day.totalCost,
-        models: day.modelBreakdowns
-          .filter((mb: ModelBreakdown) => mb.modelName !== '<synthetic>')
-          .reduce(
-            (acc: { [key: string]: { tokens: number; cost: number } }, mb: ModelBreakdown) => {
-              acc[mb.modelName] = {
-                tokens:
-                  mb.inputTokens + mb.outputTokens + mb.cacheCreationTokens + mb.cacheReadTokens,
-                cost: mb.cost,
-              };
-              return acc;
-            },
-            {}
-          ),
-      }));
-    } else {
-      processedDailyData = this.convertBlocksToDailyUsage(blocks);
-    }
+    // Process the daily data from ccusage, filtering out synthetic models
+    const processedDailyData: DailyUsage[] = dailyData.map((day) => ({
+      date: day.date,
+      totalTokens: day.totalTokens,
+      totalCost: day.totalCost,
+      models: this.mapModelBreakdowns(day.modelBreakdowns),
+    }));
 
     const todayStr = this.toISOStringLocal(new Date()).split('T')[0];
     const todayData =
@@ -296,6 +449,7 @@ export class CCUsageService {
       prediction,
       resetInfo,
       actualResetInfo,
+      activeBlock: this.buildActiveBlockInfo(activeBlock),
       predictedDepleted: prediction.depletionTime,
       currentPlan: this.currentPlan,
       tokenLimit,
@@ -304,7 +458,45 @@ export class CCUsageService {
       percentageUsed: Math.min(100, (tokensUsed / tokenLimit) * 100),
       // Enhanced session tracking
       sessionTracking,
+      dataSource: 'live',
     };
+  }
+
+  /**
+   * Build the serializable active block summary for the renderer
+   */
+  private buildActiveBlockInfo(block: SessionBlock): ActiveBlockInfo {
+    return {
+      startTime: block.startTime.toISOString(),
+      endTime: block.endTime.toISOString(),
+      tokensUsed: block.totalTokens,
+      costUSD: block.costUSD,
+      models: block.models.filter((model) => model !== '<synthetic>'),
+      burnRate: block.burnRate,
+      projection: block.projection,
+    };
+  }
+
+  /**
+   * Aggregate per-model breakdowns into a model -> {tokens, cost} map,
+   * filtering out synthetic models
+   */
+  private mapModelBreakdowns(breakdowns: CliModelBreakdown[]): {
+    [key: string]: { tokens: number; cost: number };
+  } {
+    const models: { [key: string]: { tokens: number; cost: number } } = {};
+    for (const breakdown of breakdowns) {
+      if (breakdown.modelName === '<synthetic>') continue;
+      models[breakdown.modelName] = {
+        tokens:
+          breakdown.inputTokens +
+          breakdown.outputTokens +
+          breakdown.cacheCreationTokens +
+          breakdown.cacheReadTokens,
+        cost: breakdown.cost,
+      };
+    }
+    return models;
   }
 
   /**
@@ -327,30 +519,14 @@ export class CCUsageService {
   }
 
   /**
-   * Get total tokens from a session block
-   */
-  private getTotalTokensFromBlock(block: SessionBlock): number {
-    const counts = block.tokenCounts;
-    return (
-      counts.inputTokens +
-      counts.outputTokens +
-      counts.cacheCreationInputTokens +
-      counts.cacheReadInputTokens
-    );
-  }
-
-  /**
    * Get maximum tokens from all previous blocks (like Python's get_token_limit)
    */
   private getMaxTokensFromBlocks(blocks: SessionBlock[]): number {
     let maxTokens = 0;
 
     for (const block of blocks) {
-      if (!block.isGap && !block.isActive) {
-        const totalTokens = this.getTotalTokensFromBlock(block);
-        if (totalTokens > maxTokens) {
-          maxTokens = totalTokens;
-        }
+      if (!block.isGap && !block.isActive && block.totalTokens > maxTokens) {
+        maxTokens = block.totalTokens;
       }
     }
 
@@ -398,59 +574,12 @@ export class CCUsageService {
         (sessionEndInHour.getTime() - sessionStartInHour.getTime()) / (1000 * 60); // minutes
 
       if (totalSessionDuration > 0) {
-        const blockTotalTokens = this.getTotalTokensFromBlock(block);
-        const tokensInHour = blockTotalTokens * (hourDuration / totalSessionDuration);
-        totalTokens += tokensInHour;
+        totalTokens += block.totalTokens * (hourDuration / totalSessionDuration);
       }
     }
 
     // Return tokens per minute like Python script
     return totalTokens / 60;
-  }
-
-  /**
-   * Convert blocks to daily usage for backward compatibility
-   */
-  private convertBlocksToDailyUsage(blocks: SessionBlock[]): DailyUsage[] {
-    const dailyMap = new Map<string, DailyUsage>();
-
-    for (const block of blocks) {
-      if (block.isGap) continue;
-
-      const date = block.startTime.toISOString().split('T')[0];
-
-      if (!dailyMap.has(date)) {
-        dailyMap.set(date, {
-          date,
-          totalTokens: 0,
-          totalCost: 0,
-          models: {},
-        });
-      }
-
-      const daily = dailyMap.get(date);
-      if (daily) {
-        const blockTokens = this.getTotalTokensFromBlock(block);
-        daily.totalTokens += blockTokens;
-        daily.totalCost += block.costUSD;
-
-        // Aggregate model usage, filtering out synthetic
-        const realModels = block.models.filter((m: string) => m !== '<synthetic>');
-        for (const model of realModels) {
-          if (!daily.models[model]) {
-            daily.models[model] = { tokens: 0, cost: 0 };
-          }
-          // Approximate token distribution across models
-          const modelTokens = Math.floor(blockTokens / realModels.length);
-          const modelCost = block.costUSD / realModels.length;
-          daily.models[model].tokens += modelTokens;
-          daily.models[model].cost += modelCost;
-        }
-      }
-    }
-
-    // Convert to array and sort by date
-    return Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date));
   }
 
   /**
@@ -467,7 +596,7 @@ export class CCUsageService {
     const last24HourBlocks = blocks.filter((b) => !b.isGap && b.startTime >= oneDayAgo);
     let tokens24h = 0;
     for (const block of last24HourBlocks) {
-      tokens24h += this.getTotalTokensFromBlock(block);
+      tokens24h += block.totalTokens;
     }
     const average24h = tokens24h / 24; // tokens per hour
 
@@ -476,7 +605,7 @@ export class CCUsageService {
     const last7DayBlocks = blocks.filter((b) => !b.isGap && b.startTime >= oneWeekAgo);
     let tokens7d = 0;
     for (const block of last7DayBlocks) {
-      tokens7d += this.getTotalTokensFromBlock(block);
+      tokens7d += block.totalTokens;
     }
     const average7d = tokens7d / (7 * 24); // tokens per hour
 
@@ -500,20 +629,41 @@ export class CCUsageService {
     };
   }
 
+  /**
+   * Estimate the hour of day with the highest usage. The v20 CLI only reports
+   * an entry count per block, so block tokens are distributed proportionally
+   * across the hours each block was active.
+   */
   private calculatePeakHourFromBlocks(blocks: SessionBlock[]): number {
-    const hourBuckets = new Array(24).fill(0);
+    const hourBuckets = new Array<number>(24).fill(0);
+    const now = new Date();
+
     for (const block of blocks) {
-      if (block.isGap) continue;
-      for (const entry of block.entries) {
-        const hour = new Date(entry.timestamp).getHours();
-        const tokens =
-          entry.usage.inputTokens +
-          entry.usage.outputTokens +
-          entry.usage.cacheCreationInputTokens +
-          entry.usage.cacheReadInputTokens;
-        hourBuckets[hour] += tokens;
+      if (block.isGap || block.totalTokens === 0) continue;
+
+      const start = block.startTime.getTime();
+      const end = (block.isActive ? now : (block.actualEndTime ?? block.endTime)).getTime();
+      const duration = end - start;
+
+      if (duration <= 0) {
+        hourBuckets[block.startTime.getHours()] += block.totalTokens;
+        continue;
+      }
+
+      let cursor = start;
+      while (cursor < end) {
+        // Advance to the next LOCAL hour boundary so chunks line up with
+        // getHours() attribution (epoch-aligned boundaries skew results in
+        // timezones with non-whole-hour UTC offsets).
+        const cursorDate = new Date(cursor);
+        cursorDate.setMinutes(60, 0, 0);
+        const hourEnd = Math.min(end, cursorDate.getTime());
+        const fraction = (hourEnd - cursor) / duration;
+        hourBuckets[new Date(cursor).getHours()] += block.totalTokens * fraction;
+        cursor = hourEnd;
       }
     }
+
     return hourBuckets.indexOf(Math.max(...hourBuckets));
   }
 
@@ -534,7 +684,7 @@ export class CCUsageService {
     if (this.menuBarCostSource === 'sessionWindow') {
       if (stats.sessionTracking?.activeWindow.totalCost !== undefined) {
         cost = stats.sessionTracking.activeWindow.totalCost;
-      } else if (this.historicalBlocks && this.historicalBlocks.length > 0) {
+      } else if (this.historicalBlocks.length > 0) {
         cost = this.getSessionWindowCostFromBlocks(this.historicalBlocks);
       }
     }
@@ -545,119 +695,20 @@ export class CCUsageService {
       percentageUsed: stats.percentageUsed,
       status: this.getUsageStatus(stats.percentageUsed),
       cost,
+      dataSource: stats.dataSource,
     };
   }
 
-  private getMockStats(): UsageStats {
-    const today = new Date().toISOString().split('T')[0];
-    const tokensUsed = 4200;
-    const tokenLimit = 7000;
-    const todayCost = 2.45;
-    const burnRate = 35;
-
-    // Create mock data for enhanced features
-    const resetInfo = this.resetTimeService.calculateResetInfo();
-    const velocity: VelocityInfo = {
-      current: burnRate,
-      average24h: 32,
-      average7d: 28,
-      trend: 'increasing',
-      trendPercent: 12.5,
-      peakHour: 14, // 2 PM
-      isAccelerating: true,
-    };
-
-    const prediction: PredictionInfo = {
-      depletionTime: new Date(Date.now() + 80 * 60 * 60 * 1000).toISOString(),
-      confidence: 85,
-      daysRemaining: 3.3,
-      recommendedDailyLimit: 950,
-      onTrackForReset: true,
-    };
-
+  /**
+   * Zeroed stats returned when usage data cannot be fetched (e.g. the ccusage
+   * CLI failed to spawn). Flagged so the UI can surface the failure instead of
+   * presenting fabricated numbers as real data.
+   */
+  private getUnavailableStats(): UsageStats {
     return {
-      today: {
-        date: today,
-        totalTokens: 850,
-        totalCost: todayCost,
-        models: {
-          'claude-3-5-sonnet-20241022': { tokens: 650, cost: 1.95 },
-          'claude-3-haiku-20240307': { tokens: 200, cost: 0.5 },
-        },
-      },
-      thisWeek: this.generateMockWeekData(),
-      thisMonth: this.generateMockMonthData(),
-      burnRate, // legacy field
-      velocity,
-      prediction,
-      resetInfo,
-      predictedDepleted: prediction.depletionTime, // legacy field
-      currentPlan: 'Pro',
-      tokenLimit,
-      tokensUsed,
-      tokensRemaining: tokenLimit - tokensUsed,
-      percentageUsed: (tokensUsed / tokenLimit) * 100,
+      ...this.getDefaultStats(),
+      dataSource: 'unavailable',
     };
-  }
-
-  private generateMockWeekData(): DailyUsage[] {
-    const result: DailyUsage[] = [];
-    const now = new Date();
-
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-      const dateStr = date.toISOString().split('T')[0];
-      const tokens = Math.floor(Math.random() * 1000) + 200;
-      const cost = tokens * 0.003; // Mock cost calculation
-
-      result.push({
-        date: dateStr,
-        totalTokens: tokens,
-        totalCost: cost,
-        models: {
-          'claude-3-5-sonnet-20241022': {
-            tokens: Math.floor(tokens * 0.7),
-            cost: cost * 0.7,
-          },
-          'claude-3-haiku-20240307': {
-            tokens: Math.floor(tokens * 0.3),
-            cost: cost * 0.3,
-          },
-        },
-      });
-    }
-
-    return result;
-  }
-
-  private generateMockMonthData(): DailyUsage[] {
-    const result: DailyUsage[] = [];
-    const now = new Date();
-
-    for (let i = 29; i >= 0; i--) {
-      const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-      const dateStr = date.toISOString().split('T')[0];
-      const tokens = Math.floor(Math.random() * 800) + 100;
-      const cost = tokens * 0.003;
-
-      result.push({
-        date: dateStr,
-        totalTokens: tokens,
-        totalCost: cost,
-        models: {
-          'claude-3-5-sonnet-20241022': {
-            tokens: Math.floor(tokens * 0.6),
-            cost: cost * 0.6,
-          },
-          'claude-3-haiku-20240307': {
-            tokens: Math.floor(tokens * 0.4),
-            cost: cost * 0.4,
-          },
-        },
-      });
-    }
-
-    return result;
   }
 
   private detectPlan(totalTokens: number): 'Pro' | 'Max5' | 'Max20' | 'Custom' {
@@ -721,6 +772,7 @@ export class CCUsageService {
       velocity,
       prediction,
       resetInfo,
+      activeBlock: null,
       predictedDepleted: null, // legacy field
       currentPlan:
         this.selectedPlan === 'auto'
@@ -736,6 +788,7 @@ export class CCUsageService {
           ? (this.customTokenLimit ?? 500000)
           : this.getTokenLimit(this.selectedPlan === 'auto' ? 'Pro' : this.selectedPlan),
       percentageUsed: 0,
+      dataSource: 'live',
     };
   }
 
@@ -845,32 +898,6 @@ export class CCUsageService {
       nextResetTime: actualResetTime,
       timeUntilReset,
       formattedTimeRemaining,
-    };
-  }
-
-  /**
-   * Enhanced menu bar data with reset time information
-   */
-  async getEnhancedMenuBarData(): Promise<MenuBarData> {
-    const stats = await this.getUsageStats();
-
-    let cost = stats.today.totalCost;
-    if (this.menuBarCostSource === 'sessionWindow') {
-      if (stats.sessionTracking?.activeWindow.totalCost !== undefined) {
-        cost = stats.sessionTracking.activeWindow.totalCost;
-      } else if (this.historicalBlocks && this.historicalBlocks.length > 0) {
-        cost = this.getSessionWindowCostFromBlocks(this.historicalBlocks);
-      }
-    }
-
-    return {
-      tokensUsed: stats.tokensUsed,
-      tokenLimit: stats.tokenLimit,
-      percentageUsed: stats.percentageUsed,
-      status: this.getUsageStatus(stats.percentageUsed),
-      cost,
-      timeUntilReset: this.resetTimeService.formatTimeUntilReset(stats.resetInfo.timeUntilReset),
-      resetInfo: stats.resetInfo,
     };
   }
 
