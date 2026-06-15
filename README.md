@@ -79,29 +79,16 @@ The app automatically detects your Claude Code configuration from the `~/.claude
 - Native, ccusage-compatible JSONL parsing (incremental scan + dedup) and 5-hour block computation
 - No Electron, no Node, and no external runtime dependencies — a single ~3 MB app bundle
 
-## Legacy: Electron app
+## History: the Electron app
 
-> **The Electron app is being phased out** in favor of the native Swift app above. It remains in the repository root (`main.ts`, `preload.ts`, and `src/`) for now, but new development targets the Swift app.
+CCSeva began as a macOS menu bar app built with Electron 36, React 19, TypeScript 5, Tailwind CSS 3, and Radix UI. It was fully replaced by the native Swift app to make CCSeva dramatically lighter (~3 MB vs. hundreds, near-zero idle overhead).
 
-The original CCSeva was a macOS menu bar app built with Electron 36, React 19, TypeScript 5, Tailwind CSS 3, and Radix UI, using the [`ccusage`](https://github.com/ryoppippi/ccusage) package for data integration.
-
-### Build & run
+The Electron sources (`main.ts`, `preload.ts`, `src/`, and the webpack/Tailwind/Biome config) were removed from the repository in the "remove Electron app" change. To browse or build that version, check out the last commit that still contained it:
 
 ```bash
-git clone https://github.com/Iamshankhadeep/ccseva.git
-cd ccseva
-npm install
-npm run build
-npm start
+git log --oneline -- src        # find the last commit touching the Electron app
+git checkout <that-commit>      # then: npm install && npm run build && npm start
 ```
-
-### Development
-
-```bash
-npm run electron-dev   # hot reload development
-```
-
-The Electron app requires Node.js 18+ to build and runs on macOS 10.15+.
 
 ## License
 
