@@ -94,11 +94,11 @@ body:
       required: true
 
   - type: input
-    id: node-version
+    id: xcode-version
     attributes:
-      label: Node.js Version
-      description: What version of Node.js are you using? (if building from source)
-      placeholder: e.g. 18.17.0
+      label: Xcode / Swift Version
+      description: What Xcode/Swift version are you using? (if building from source)
+      placeholder: e.g. Xcode 16.4 / Swift 6.1
 
   - type: input
     id: claude-version
