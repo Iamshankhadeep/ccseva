@@ -5,127 +5,150 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   release:
-    runs-on: macos-latest
-    
+    runs-on: macos-15
+
     steps:
     - uses: actions/checkout@v4
-    
-    - name: Use Node.js 20.x
-      uses: actions/setup-node@v4
-      with:
-        node-version: 20.x
-        cache: 'npm'
-    
-    - name: Install dependencies
-      run: npm ci
-    
-    - name: Run linting
-      run: npm run lint
-       
-    - name: Type check
-      run: npx tsc --noEmit
 
-    - name: Build distributables
-      run: npm run dist:mac
-      timeout-minutes: 30
+    - name: Select Xcode 16.4
+      uses: maxim-lobanov/setup-xcode@v1
+      with:
+        xcode-version: '16.4'
+
+    - name: Detect signing secrets
+      run: echo "HAS_SIGNING=${{ secrets.MACOS_CERTIFICATE_BASE64 != '' }}" >> "$GITHUB_ENV"
+
+    - name: Build Swift binary
+      working-directory: swift
+      run: swift build -c release
+
+    - name: Assemble CCSeva.app
+      working-directory: swift
+      run: ./scripts/build-app.sh
+
+    - name: Import Developer ID certificate
+      if: ${{ env.HAS_SIGNING == 'true' }}
       env:
-        GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        # Code signing and notarization
-        CSC_LINK: ${{ secrets.CSC_LINK }}
-        CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-        APPLE_ID: ${{ secrets.APPLE_ID }}
-        APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+        MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      run: |
+        set -euo pipefail
+        KEYCHAIN_PATH="$RUNNER_TEMP/ccseva-signing.keychain-db"
+        KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+        CERT_PATH="$RUNNER_TEMP/developer-id.p12"
+
+        echo "$MACOS_CERTIFICATE_BASE64" | base64 --decode > "$CERT_PATH"
+
+        security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        security import "$CERT_PATH" -P "$MACOS_CERTIFICATE_PASSWORD" \
+          -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+        security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
+
+        rm -f "$CERT_PATH"
+        echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+    - name: Codesign with Developer ID
+      if: ${{ env.HAS_SIGNING == 'true' }}
+      env:
         APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-    
-    - name: Verify build artifacts
       run: |
-        echo "Verifying build artifacts..."
-        ls -la release/
-        if [ ! -f release/*.dmg ]; then
-          echo "ERROR: No DMG file found!"
-          echo "Build artifacts:"
-          find release/ -type f -name "*" || echo "No release directory found"
-          exit 1
-        fi
-        echo "✅ DMG file found"
-        
-    - name: Show notarization status
-      if: success() || failure()
+        set -euo pipefail
+        IDENTITY="Developer ID Application: ${{ secrets.APPLE_DEVELOPER_NAME }} ($APPLE_TEAM_ID)"
+        codesign --force --options runtime --timestamp \
+          --sign "$IDENTITY" swift/dist/CCSeva.app
+        codesign --verify --deep --strict --verbose=2 swift/dist/CCSeva.app
+
+    - name: Package artifacts (pre-notarization)
       run: |
-        echo "Build completed. Checking for any notarization logs..."
-        if [ -d "release/" ]; then
-          echo "Contents of release directory:"
-          ls -la release/
-        fi
-        
+        set -euo pipefail
+        ZIP="CCSeva-${{ github.ref_name }}-arm64.zip"
+        ditto -c -k --keepParent swift/dist/CCSeva.app "$ZIP"
+        echo "ARTIFACT_ZIP=$ZIP" >> "$GITHUB_ENV"
+
+    - name: Notarize and staple
+      if: ${{ env.HAS_SIGNING == 'true' }}
+      env:
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      run: |
+        set -euo pipefail
+        xcrun notarytool submit "$ARTIFACT_ZIP" \
+          --apple-id "$APPLE_ID" \
+          --team-id "$APPLE_TEAM_ID" \
+          --password "$APPLE_APP_PASSWORD" \
+          --wait
+        xcrun stapler staple swift/dist/CCSeva.app
+
+    - name: Re-package stapled app
+      if: ${{ env.HAS_SIGNING == 'true' }}
+      run: |
+        set -euo pipefail
+        rm -f "$ARTIFACT_ZIP"
+        ditto -c -k --keepParent swift/dist/CCSeva.app "$ARTIFACT_ZIP"
+
+    - name: Create DMG
+      run: |
+        set -euo pipefail
+        DMG="CCSeva-${{ github.ref_name }}-arm64.dmg"
+        hdiutil create -volname CCSeva -srcfolder swift/dist/CCSeva.app -ov -format UDZO "$DMG"
+        echo "ARTIFACT_DMG=$DMG" >> "$GITHUB_ENV"
+
+    - name: Compose release body
+      run: |
+        set -euo pipefail
+        {
+          echo "## CCSeva ${{ github.ref_name }} (native Swift app)"
+          echo ""
+          echo "This is the native Swift macOS menu bar app (Apple Silicon / arm64)."
+          echo ""
+          echo "### Install"
+          echo ""
+          echo "Download \`${ARTIFACT_DMG}\` (or \`${ARTIFACT_ZIP}\`), then drag **CCSeva** to your Applications folder."
+          echo ""
+          if [ "${HAS_SIGNING}" = "true" ]; then
+            echo "This build is signed with a Developer ID and notarized by Apple."
+          else
+            echo "> **Note:** This build is **not** notarized. On first launch, right-click **CCSeva** and choose **Open**, or remove the quarantine flag with:"
+            echo ">"
+            echo "> \`\`\`sh"
+            echo "> xattr -dr com.apple.quarantine /Applications/CCSeva.app"
+            echo "> \`\`\`"
+          fi
+          echo ""
+          echo "### Requirements"
+          echo ""
+          echo "- macOS 14 (Sonoma) or later, Apple Silicon"
+        } > release-body.md
+        echo "RELEASE_BODY_FILE=release-body.md" >> "$GITHUB_ENV"
+
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: distributables-${{ github.ref_name }}
+        name: ccseva-${{ github.ref_name }}
         path: |
-          release/*.dmg
-          release/*.yml
-          release/latest-mac.yml
-    
+          CCSeva-${{ github.ref_name }}-arm64.zip
+          CCSeva-${{ github.ref_name }}-arm64.dmg
+
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/')
       with:
         files: |
-          release/*.dmg
+          CCSeva-${{ github.ref_name }}-arm64.zip
+          CCSeva-${{ github.ref_name }}-arm64.dmg
         draft: false
-        prerelease: contains(github.ref, 'beta') || contains(github.ref, 'alpha') || contains(github.ref, 'rc')
+        prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'alpha') || contains(github.ref, 'rc') }}
         generate_release_notes: true
         name: CCSeva ${{ github.ref_name }}
-        body: |
-          ## 🚀 CCSeva ${{ github.ref_name }}
-          
-          A beautiful macOS menu bar app for real-time Claude Code usage tracking with live token monitoring, usage analytics, and smart notifications.
-          
-          ### 📥 Download Instructions
-          
-          **Choose the right version for your Mac:**
-          
-          - **🍎 Apple Silicon (M1/M2/M3/M4)**: Download `CCSeva-${{ github.ref_name }}-arm64.dmg`
-          - **💻 Intel Macs**: Download `CCSeva-${{ github.ref_name }}.dmg`
-          
-          > **Not sure which Mac you have?** Go to **Apple Menu → About This Mac**. If you see "Apple M1", "Apple M2", or "Apple M3", choose the ARM64 version. If you see "Intel", choose the Intel version.
-          
-          ### 📦 Installation
-          
-          1. Download the appropriate `.dmg` file from the assets below
-          2. Double-click the downloaded DMG file to mount it
-          3. Drag **CCSeva** to your **Applications** folder
-          4. Launch CCSeva from Applications or Spotlight
-          5. Grant necessary permissions when prompted (menu bar access)
-          
-          ### ✨ Features
-          
-          - **Real-time Usage Monitoring**: Live token consumption tracking
-          - **Smart Plan Detection**: Automatically detects your Claude plan (Pro/Max5/Max20)
-          - **Usage Analytics**: 7-day usage trends and burn rate calculations
-          - **Native Notifications**: Intelligent alerts at 70% and 90% usage thresholds
-          - **Beautiful Interface**: Clean, modern design with glass morphism effects
-          - **Menu Bar Integration**: Unobtrusive menu bar presence with percentage display
-          
-          ### 🔧 Requirements
-          
-          - **macOS 10.15** (Catalina) or later
-          - **Claude Code CLI** installed and configured
-          - Valid Claude API credentials in `~/.claude` directory
-          
-          ### 🛠️ Technical Details
-          
-          - Built with Electron and React
-          - Uses the `ccusage` npm package for data fetching
-          - Code-signed and notarized for security
-          - Supports both Intel and Apple Silicon architectures
-          
-          ---
-          
-          💡 **Need help?** [Open an issue](https://github.com/Iamshankhadeep/ccseva/issues) or check the [documentation](https://github.com/Iamshankhadeep/ccseva#readme).
-          
+        body_path: release-body.md
       env:
-        GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
