@@ -49,7 +49,7 @@ struct RootView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            ClaudeLogo(size: 32)
+            AppIconImage(size: 32)
             VStack(alignment: .leading, spacing: 1) {
                 Text("CCSeva")
                     .font(.firaCode(18, weight: .bold))

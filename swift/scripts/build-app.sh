@@ -14,6 +14,13 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 cp "$BIN_PATH" "$APP/Contents/MacOS/CCSeva"
 
+# App icon (shared with the Electron build) so Finder/Dock show the real mark.
+if [ -f assets/icon.icns ]; then
+	cp assets/icon.icns "$APP/Contents/Resources/AppIcon.icns"
+elif [ -f ../assets/icon.icns ]; then
+	cp ../assets/icon.icns "$APP/Contents/Resources/AppIcon.icns"
+fi
+
 # SwiftPM emits bundled resources (Fira Code fonts) into CCSeva_CCSeva.bundle next
 # to the binary. Bundle.module resolves it relative to the executable at runtime,
 # so it must sit in Contents/Resources alongside the app's other resources.
@@ -35,6 +42,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 	<string>com.iamshankhadeep.ccseva</string>
 	<key>CFBundleName</key>
 	<string>CCSeva</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

@@ -48,22 +48,14 @@ struct DashboardView: View {
                     .foregroundStyle(Color.neutral400)
             }
 
-            HStack(spacing: 24) {
-                ProgressRing(
-                    percentage: store.localTokenPercentage,
-                    ringGradient: store.tokenStatus.gradient,
-                    centerLabel: "TOKENS",
-                    bigText: "",
-                    subtitle: "\(store.tokenStatus.emoji) \(store.tokenStatus.label)"
-                )
-                ProgressRing(
-                    percentage: store.sessionElapsedFraction * 100,
-                    ringGradient: Gradients.timeRing,
-                    centerLabel: "SESSION",
-                    bigText: "",
-                    subtitle: store.sessionTimeLeft.map { "⏱ \($0) left" } ?? "no session"
-                )
-            }
+            ProgressRing(
+                percentage: store.sessionElapsedFraction * 100,
+                ringGradient: Gradients.timeRing,
+                centerLabel: "SESSION",
+                bigText: "",
+                subtitle: store.sessionTimeLeft.map { "⏱ \($0) left" } ?? "no active session",
+                diameter: 180
+            )
             .frame(maxWidth: .infinity)
 
             keyMetricsRow
@@ -82,18 +74,23 @@ struct DashboardView: View {
             metric(
                 value: Format.tokens(store.activeBlockTokens),
                 label: "Tokens Used",
-                sub: "of \(Format.tokens(store.localTokenLimit))"
+                sub: "current 5h block"
             )
             metric(
                 value: Format.cost(store.snapshot?.todayCost ?? 0),
                 label: "Cost Today",
                 sub: "\(Format.tokens(store.snapshot?.todayTokens ?? 0)) tokens"
             )
-            metric(
-                value: Format.tokens(store.tokensRemaining),
-                label: "Remaining",
-                sub: store.sessionTimeLeft.map { "\($0) left" } ?? "No active session"
-            )
+            if store.limitsState.isLive, let fiveHour = store.limits?.fiveHour {
+                let left = max(0, 100 - fiveHour.utilization)
+                metric(value: "\(Int(left.rounded()))%", label: "5h Limit Left", sub: "live")
+            } else {
+                metric(
+                    value: store.sessionTimeLeft ?? "—",
+                    label: "Session Left",
+                    sub: store.sessionTimeLeft == nil ? "no active session" : "until reset"
+                )
+            }
         }
     }
 
@@ -222,17 +219,29 @@ struct DashboardView: View {
         }
     }
 
+    /// The Current Plan card's progress reflects real headroom, never the
+    /// token-vs-plan-limit estimate (meaningless against cache-inclusive token
+    /// counts). Prefers the live 5-hour utilization; falls back to session time.
+    private var planProgress: (label: String, value: String, fraction: Double, gradient: LinearGradient) {
+        if store.limitsState.isLive, let fiveHour = store.limits?.fiveHour {
+            let u = min(max(fiveHour.utilization, 0), 100)
+            return ("5h limit used", "\(Int(u.rounded()))%", u / 100, UsageStatus(percentage: u).gradient)
+        }
+        let label = store.sessionTimeLeft.map { "\($0) left" } ?? "no session"
+        return ("Session elapsed", label, store.sessionElapsedFraction, Gradients.timeRing)
+    }
+
     private var currentPlanCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let progress = planProgress
+        return VStack(alignment: .leading, spacing: 12) {
             cardHeader(
                 tile: GradientIconTile(systemName: "checkmark.shield",
-                                       colors: [store.tokenStatus.color, store.tokenStatus.color.opacity(0.7)]),
+                                       colors: GradientIconTile.today),
                 title: store.planDisplayName, subtitle: "Current Plan"
             )
             VStack(spacing: 8) {
-                StatRow(label: "Daily Limit", value: Format.tokens(store.localTokenLimit))
-                ThemedProgressBar(value: store.localTokenPercentage / 100,
-                                  tint: store.tokenStatus.gradient, height: 8)
+                StatRow(label: progress.label, value: progress.value)
+                ThemedProgressBar(value: progress.fraction, tint: progress.gradient, height: 8)
             }
         }
         .warmCard()

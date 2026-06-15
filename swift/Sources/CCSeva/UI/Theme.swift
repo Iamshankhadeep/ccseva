@@ -245,47 +245,28 @@ struct GradientIconTile: View {
     static let week: [Color] = [Color(hex: 0x22C55E), Color(hex: 0x14B8A6)]
 }
 
-// MARK: - Claude logo
+// MARK: - App icon
 
-/// Orange disc with the white Claude swirl (approximation of the App.tsx SVG path).
-struct ClaudeLogo: View {
+/// The real CCSeva app icon (assets/icon.icns), bundled as a resource and shown
+/// in the header. Loaded once from Bundle.module.
+struct AppIconImage: View {
     var size: CGFloat = 28
 
-    var body: some View {
-        Canvas { context, canvasSize in
-            let s = canvasSize.width
-            // Background disc.
-            context.fill(
-                Path(ellipseIn: CGRect(x: 0, y: 0, width: s, height: s)),
-                with: .color(.claudePrimary)
-            )
-            // White ring with an inner cut, mimicking the asymmetric swirl: a full
-            // white annulus, then knock out a wedge on the bottom-right.
-            let outer = s * 0.5
-            let inner = s * 0.30
-            var ring = Path()
-            ring.addEllipse(in: CGRect(
-                x: s / 2 - outer * 0.84, y: s / 2 - outer * 0.84,
-                width: outer * 1.68, height: outer * 1.68
-            ))
-            ring.addEllipse(in: CGRect(
-                x: s / 2 - inner, y: s / 2 - inner,
-                width: inner * 2, height: inner * 2
-            ))
-            context.fill(ring, with: .color(.white), style: FillStyle(eoFill: true))
+    private static let nsImage: NSImage? = {
+        guard let url = Bundle.module.url(forResource: "AppIcon", withExtension: "png") else {
+            return nil
+        }
+        return NSImage(contentsOf: url)
+    }()
 
-            // Re-fill the lower-right quadrant with the disc color to create the
-            // open "C"/swirl shape.
-            var wedge = Path()
-            wedge.move(to: CGPoint(x: s * 0.5, y: s * 0.5))
-            wedge.addArc(
-                center: CGPoint(x: s * 0.5, y: s * 0.5),
-                radius: outer,
-                startAngle: .degrees(-30), endAngle: .degrees(95),
-                clockwise: false
-            )
-            wedge.closeSubpath()
-            context.fill(wedge, with: .color(.claudePrimary))
+    var body: some View {
+        Group {
+            if let image = Self.nsImage {
+                Image(nsImage: image).resizable().interpolation(.high)
+            } else {
+                // Fallback: a simple themed disc if the resource is missing.
+                Circle().fill(Color.claudePrimary)
+            }
         }
         .frame(width: size, height: size)
     }
