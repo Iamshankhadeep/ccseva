@@ -14,6 +14,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Diagnose.run()
             exit(0)
         }
+        if CommandLine.arguments.contains("--verify-resources") {
+            let requiredResources = [
+                ("FiraCode-Regular", "ttf"),
+                ("AppIcon", "png"),
+            ]
+            for (name, extensionName) in requiredResources {
+                guard CCSevaResources.bundle.url(forResource: name, withExtension: extensionName) != nil else {
+                    FileHandle.standardError.write(
+                        Data("Missing bundled resource: \(name).\(extensionName)\n".utf8)
+                    )
+                    exit(1)
+                }
+            }
+            print("CCSeva packaged resources verified")
+            exit(0)
+        }
         let app = NSApplication.shared
         let delegate = AppDelegate()
         retainedDelegate = delegate

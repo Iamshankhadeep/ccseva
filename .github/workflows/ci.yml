@@ -82,6 +82,7 @@ jobs:
       run: |
         test -d dist/CCSeva.app
         test -d dist/CCSeva.app/Contents/Resources/CCSeva_CCSeva.bundle
+        dist/CCSeva.app/Contents/MacOS/CCSeva --verify-resources
 
     - name: Smoke test (--diagnose)
       working-directory: swift

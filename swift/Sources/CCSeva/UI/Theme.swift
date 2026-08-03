@@ -140,7 +140,7 @@ enum FiraCode {
         ]
         var count = 0
         for face in faces {
-            guard let url = Bundle.module.url(forResource: face, withExtension: "ttf") else {
+            guard let url = CCSevaResources.bundle.url(forResource: face, withExtension: "ttf") else {
                 continue
             }
             var error: Unmanaged<CFError>?
@@ -248,12 +248,12 @@ struct GradientIconTile: View {
 // MARK: - App icon
 
 /// The real CCSeva app icon (assets/icon.icns), bundled as a resource and shown
-/// in the header. Loaded once from Bundle.module.
+/// in the header. Loaded once from the packaged SwiftPM resource bundle.
 struct AppIconImage: View {
     var size: CGFloat = 28
 
     private static let nsImage: NSImage? = {
-        guard let url = Bundle.module.url(forResource: "AppIcon", withExtension: "png") else {
+        guard let url = CCSevaResources.bundle.url(forResource: "AppIcon", withExtension: "png") else {
             return nil
         }
         return NSImage(contentsOf: url)

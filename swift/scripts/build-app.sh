@@ -28,9 +28,9 @@ elif [ -f ../assets/icon.icns ]; then
 	cp ../assets/icon.icns "$APP/Contents/Resources/AppIcon.icns"
 fi
 
-# SwiftPM emits bundled resources (Fira Code fonts) into CCSeva_CCSeva.bundle next
-# to the binary. Bundle.module resolves it relative to the executable at runtime,
-# so it must sit in Contents/Resources alongside the app's other resources.
+# Keep the SwiftPM resource bundle in the standard signed-app resource directory.
+# CCSevaResources resolves this location in packaged builds and falls back to
+# Bundle.module when running directly through SwiftPM.
 RESOURCE_BUNDLE="$BIN_DIR/CCSeva_CCSeva.bundle"
 if [ -d "$RESOURCE_BUNDLE" ]; then
 	cp -R "$RESOURCE_BUNDLE" "$APP/Contents/Resources/"
