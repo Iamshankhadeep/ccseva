@@ -31,6 +31,8 @@ jobs:
 
     - name: Assemble CCSeva.app
       working-directory: swift
+      env:
+        CCSEVA_VERSION: ${{ github.ref_name }}
       run: ./scripts/build-app.sh
 
     - name: Import Developer ID certificate

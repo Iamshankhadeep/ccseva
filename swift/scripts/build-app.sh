@@ -4,6 +4,13 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+APP_VERSION="${CCSEVA_VERSION:-2.0.0}"
+APP_VERSION="${APP_VERSION#v}"
+if [[ ! "$APP_VERSION" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
+	echo "Invalid CCSEVA_VERSION: $APP_VERSION" >&2
+	exit 1
+fi
+
 swift build -c release --arch arm64
 BIN_DIR="$(swift build -c release --arch arm64 --show-bin-path)"
 BIN_PATH="$BIN_DIR/CCSeva"
@@ -31,7 +38,7 @@ else
 	echo "WARNING: resource bundle not found at $RESOURCE_BUNDLE (fonts will not load)" >&2
 fi
 
-cat > "$APP/Contents/Info.plist" <<'PLIST'
+cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -47,9 +54,9 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>2.0.0</string>
+	<string>$APP_VERSION</string>
 	<key>CFBundleVersion</key>
-	<string>2.0.0</string>
+	<string>$APP_VERSION</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>LSUIElement</key>
