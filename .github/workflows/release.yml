@@ -21,7 +21,9 @@ jobs:
         xcode-version: '16.4'
 
     - name: Detect signing secrets
-      run: echo "HAS_SIGNING=${{ secrets.MACOS_CERTIFICATE_BASE64 != '' }}" >> "$GITHUB_ENV"
+      run: |
+        echo "HAS_SIGNING=${{ secrets.CSC_LINK != '' && secrets.CSC_KEY_PASSWORD != '' }}" >> "$GITHUB_ENV"
+        echo "HAS_NOTARIZATION=${{ secrets.APPLE_ID != '' && secrets.APPLE_TEAM_ID != '' && secrets.APPLE_APP_SPECIFIC_PASSWORD != '' }}" >> "$GITHUB_ENV"
 
     - name: Build Swift binary
       working-directory: swift
@@ -34,36 +36,42 @@ jobs:
     - name: Import Developer ID certificate
       if: ${{ env.HAS_SIGNING == 'true' }}
       env:
-        MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
-        MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        CSC_LINK: ${{ secrets.CSC_LINK }}
+        CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
       run: |
         set -euo pipefail
         KEYCHAIN_PATH="$RUNNER_TEMP/ccseva-signing.keychain-db"
         KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
         CERT_PATH="$RUNNER_TEMP/developer-id.p12"
 
-        echo "$MACOS_CERTIFICATE_BASE64" | base64 --decode > "$CERT_PATH"
+        case "$CSC_LINK" in
+          data:*base64,*) printf '%s' "${CSC_LINK#*,}" | base64 --decode > "$CERT_PATH" ;;
+          http://*|https://*) curl --fail --silent --show-error --location "$CSC_LINK" --output "$CERT_PATH" ;;
+          *) printf '%s' "$CSC_LINK" | base64 --decode > "$CERT_PATH" ;;
+        esac
 
         security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
         security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
         security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-        security import "$CERT_PATH" -P "$MACOS_CERTIFICATE_PASSWORD" \
+        security import "$CERT_PATH" -P "$CSC_KEY_PASSWORD" \
           -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
         security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
         security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
 
+        IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | awk -F'"' '/Developer ID Application/{print $2; exit}')"
+        test -n "$IDENTITY"
         rm -f "$CERT_PATH"
         echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+        echo "SIGNING_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
 
     - name: Codesign with Developer ID
       if: ${{ env.HAS_SIGNING == 'true' }}
       env:
-        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        SIGNING_IDENTITY: ${{ env.SIGNING_IDENTITY }}
       run: |
         set -euo pipefail
-        IDENTITY="Developer ID Application: ${{ secrets.APPLE_DEVELOPER_NAME }} ($APPLE_TEAM_ID)"
         codesign --force --options runtime --timestamp \
-          --sign "$IDENTITY" swift/dist/CCSeva.app
+          --sign "$SIGNING_IDENTITY" swift/dist/CCSeva.app
         codesign --verify --deep --strict --verbose=2 swift/dist/CCSeva.app
 
     - name: Package artifacts (pre-notarization)
@@ -74,22 +82,22 @@ jobs:
         echo "ARTIFACT_ZIP=$ZIP" >> "$GITHUB_ENV"
 
     - name: Notarize and staple
-      if: ${{ env.HAS_SIGNING == 'true' }}
+      if: ${{ env.HAS_SIGNING == 'true' && env.HAS_NOTARIZATION == 'true' }}
       env:
         APPLE_ID: ${{ secrets.APPLE_ID }}
         APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
       run: |
         set -euo pipefail
         xcrun notarytool submit "$ARTIFACT_ZIP" \
           --apple-id "$APPLE_ID" \
           --team-id "$APPLE_TEAM_ID" \
-          --password "$APPLE_APP_PASSWORD" \
+          --password "$APPLE_APP_SPECIFIC_PASSWORD" \
           --wait
         xcrun stapler staple swift/dist/CCSeva.app
 
     - name: Re-package stapled app
-      if: ${{ env.HAS_SIGNING == 'true' }}
+      if: ${{ env.HAS_SIGNING == 'true' && env.HAS_NOTARIZATION == 'true' }}
       run: |
         set -euo pipefail
         rm -f "$ARTIFACT_ZIP"
@@ -114,8 +122,10 @@ jobs:
           echo ""
           echo "Download \`${ARTIFACT_DMG}\` (or \`${ARTIFACT_ZIP}\`), then drag **CCSeva** to your Applications folder."
           echo ""
-          if [ "${HAS_SIGNING}" = "true" ]; then
+          if [ "${HAS_SIGNING}" = "true" ] && [ "${HAS_NOTARIZATION}" = "true" ]; then
             echo "This build is signed with a Developer ID and notarized by Apple."
+          elif [ "${HAS_SIGNING}" = "true" ]; then
+            echo "This build is signed with a Developer ID but is not notarized."
           else
             echo "> **Note:** This build is **not** notarized. On first launch, right-click **CCSeva** and choose **Open**, or remove the quarantine flag with:"
             echo ">"
