@@ -66,6 +66,20 @@ See [`swift/README.md`](swift/README.md) for full build, architecture, and data-
 
 The app automatically detects your Claude Code configuration from the `~/.claude` directory and refreshes on file changes (with a periodic fallback poll).
 
+### Optional claudecode.directory sync
+
+Open **Settings → claudecode.directory → Connect with GitHub** to pair this Mac with your
+private usage dashboard. CCSeva opens a short-lived verification page in your browser and stores
+the resulting device credential in macOS Keychain. Connected Macs sync idempotent daily/model
+aggregates in the background and can be disconnected from either CCSeva or the website.
+
+Sync is local-first and opt-in. CCSeva uploads token totals, estimated cost, date, timezone,
+harness, provider, and model. It never uploads prompts, responses, transcript content, project
+names or paths, request IDs, API keys, or Claude OAuth credentials.
+
+For local integration testing, set `CCSEVA_DIRECTORY_URL` to the dynamic directory server URL.
+Production builds default to `https://claudecode.directory`.
+
 ## Requirements
 
 - macOS 14+ (Sonoma)

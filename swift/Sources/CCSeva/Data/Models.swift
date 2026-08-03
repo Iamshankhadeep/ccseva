@@ -20,7 +20,7 @@ struct UsageEntry {
 }
 
 /// Token sums broken down by type.
-struct TokenCounts {
+struct TokenCounts: Equatable {
     var input = 0
     var output = 0
     var cacheCreation = 0
@@ -131,6 +131,20 @@ struct ProjectCost: Identifiable {
     var id: String { name }
 }
 
+/// Privacy-preserving daily/model aggregate sent to claudecode.directory.
+/// It intentionally contains no transcript text, request IDs, or project paths.
+struct UsageSyncBucket: Equatable {
+    let bucketStart: Date
+    let localDate: String
+    let timezone: String
+    let harness: String
+    let provider: String
+    let model: String
+    var tokens = TokenCounts()
+    var estimatedCostMicros: Int64 = 0
+    var eventCount: Int = 0
+}
+
 /// Scan bookkeeping for diagnostics.
 struct ScanStats {
     var filesSeen = 0
@@ -155,6 +169,8 @@ struct UsageSnapshot {
     let modelBreakdown: [ModelUsage]
     /// Current-month per-project cost, sorted descending.
     let projectsThisMonth: [ProjectCost]
+    /// All locally available usage, bucketed by local day and model for optional cloud sync.
+    let syncBuckets: [UsageSyncBucket]
     let todayTokens: Int
     let todayCost: Double
     let hasUnpricedModels: Bool
@@ -165,7 +181,7 @@ struct UsageSnapshot {
     static let empty = UsageSnapshot(
         generatedAt: Date(), stats: ScanStats(), totalEntries: 0, blocks: [],
         activeBlock: nil, daily: [], weekly: [], modelBreakdown: [],
-        projectsThisMonth: [], todayTokens: 0, todayCost: 0,
+        projectsThisMonth: [], syncBuckets: [], todayTokens: 0, todayCost: 0,
         hasUnpricedModels: false, unknownModels: [], maxBlockTokens: 0
     )
 }

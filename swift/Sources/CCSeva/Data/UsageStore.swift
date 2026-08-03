@@ -12,6 +12,12 @@ enum LimitsState: Equatable {
     var isLive: Bool { self == .live }
 }
 
+enum DirectoryConnectionState: Equatable {
+    case disconnected
+    case pairing
+    case connected
+}
+
 /// Single source of truth for the app. Owns the scanner actor, the FSEvents
 /// watcher, the fallback/limits timers and all derived UI state.
 @MainActor
@@ -23,11 +29,19 @@ final class UsageStore: ObservableObject {
     @Published private(set) var isRefreshing = false
     @Published private(set) var lastRefreshAt: Date?
     @Published private(set) var settings: AppSettings
+    @Published private(set) var directoryState: DirectoryConnectionState = .disconnected
+    @Published private(set) var directoryCredential: DirectoryCredential?
+    @Published private(set) var directoryPairing: DirectoryPairing?
+    @Published private(set) var directoryLastSyncAt: Date?
+    @Published private(set) var directoryError: String?
+    @Published private(set) var isDirectorySyncing = false
 
     private let dataSource = UsageDataSource()
     private let limitsProvider: LimitsProvider
     private let notifier = Notifier()
     private let settingsManager = SettingsManager.shared
+    private let directoryClient = DirectoryClient()
+    private let directoryCredentialStore = DirectoryCredentialStore()
 
     private var watcher: FileWatcher?
     private var fallbackTimer: Timer?
@@ -38,6 +52,8 @@ final class UsageStore: ObservableObject {
     private var usageTaskRunning = false
     private var limitsTaskRunning = false
     private var limitsBackoffUntil = Date.distantPast
+    private var directoryPairingTask: Task<Void, Never>?
+    private var directorySyncTask: Task<Void, Never>?
 
     /// Last two five-hour utilization readings, used for the slope-based
     /// "you'll hit the limit at HH:mm" prediction.
@@ -46,6 +62,8 @@ final class UsageStore: ObservableObject {
     init(limitsProvider: LimitsProvider = OAuthLimitsProvider()) {
         self.limitsProvider = limitsProvider
         self.settings = settingsManager.load()
+        self.directoryCredential = directoryCredentialStore.load()
+        self.directoryState = directoryCredential == nil ? .disconnected : .connected
     }
 
     // MARK: - Lifecycle
@@ -72,6 +90,8 @@ final class UsageStore: ObservableObject {
         fallbackTimer?.invalidate()
         limitsTimer?.invalidate()
         alternateTimer?.invalidate()
+        directoryPairingTask?.cancel()
+        directorySyncTask?.cancel()
     }
 
     private func rescheduleTimers() {
@@ -121,6 +141,7 @@ final class UsageStore: ObservableObject {
             self.usageTaskRunning = false
             self.isRefreshing = false
             self.didUpdate()
+            self.scheduleDirectorySync()
         }
     }
 
@@ -184,6 +205,114 @@ final class UsageStore: ObservableObject {
     }
 
     var settingsFilePath: String { settingsManager.settingsURL.path }
+
+    // MARK: - claudecode.directory
+
+    func connectDirectory() {
+        guard directoryState != .pairing else { return }
+        directoryPairingTask?.cancel()
+        directoryState = .pairing
+        directoryPairing = nil
+        directoryError = nil
+
+        directoryPairingTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let pairing = try await directoryClient.requestPairing(
+                    installationId: DirectoryIdentity.installationId,
+                    deviceName: DirectoryIdentity.deviceName,
+                    appVersion: DirectoryIdentity.appVersion
+                )
+                guard !Task.isCancelled else { return }
+                directoryPairing = pairing
+                NSWorkspace.shared.open(pairing.verificationUriComplete)
+
+                let deadline = Date().addingTimeInterval(TimeInterval(pairing.expiresIn))
+                while Date() < deadline, !Task.isCancelled {
+                    do {
+                        let credential = try await directoryClient.pollToken(deviceCode: pairing.deviceCode)
+                        guard directoryCredentialStore.save(credential) else {
+                            throw DirectoryClientError.server("Could not store the device credential in Keychain.")
+                        }
+                        directoryCredential = credential
+                        directoryState = .connected
+                        directoryPairing = nil
+                        directoryError = nil
+                        syncDirectoryNow()
+                        return
+                    } catch DirectoryClientError.authorizationPending {
+                        try? await Task.sleep(nanoseconds: UInt64(max(pairing.interval, 5)) * 1_000_000_000)
+                    }
+                }
+                if !Task.isCancelled { throw DirectoryClientError.expired }
+            } catch {
+                guard !Task.isCancelled else { return }
+                directoryState = .disconnected
+                directoryPairing = nil
+                directoryError = error.localizedDescription
+            }
+        }
+    }
+
+    func openDirectoryPairingPage() {
+        if let url = directoryPairing?.verificationUriComplete {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    func syncDirectoryNow() {
+        guard let credential = directoryCredential, !isDirectorySyncing else { return }
+        directorySyncTask?.cancel()
+        isDirectorySyncing = true
+        directoryError = nil
+        let buckets = snapshot?.syncBuckets ?? []
+        directorySyncTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await directoryClient.sync(
+                    buckets: buckets,
+                    credential: credential,
+                    appVersion: DirectoryIdentity.appVersion
+                )
+                guard !Task.isCancelled else { return }
+                directoryLastSyncAt = Date()
+            } catch DirectoryClientError.unauthorized {
+                directoryCredentialStore.delete()
+                directoryCredential = nil
+                directoryState = .disconnected
+                directoryError = DirectoryClientError.unauthorized.localizedDescription
+            } catch {
+                guard !Task.isCancelled else { return }
+                directoryError = error.localizedDescription
+            }
+            isDirectorySyncing = false
+        }
+    }
+
+    func disconnectDirectory() {
+        directoryPairingTask?.cancel()
+        directorySyncTask?.cancel()
+        let credential = directoryCredential
+        directoryCredentialStore.delete()
+        directoryCredential = nil
+        directoryPairing = nil
+        directoryState = .disconnected
+        isDirectorySyncing = false
+        directoryLastSyncAt = nil
+        directoryError = nil
+        guard let credential else { return }
+        Task { try? await directoryClient.disconnect(credential: credential) }
+    }
+
+    private func scheduleDirectorySync() {
+        guard directoryState == .connected, !isDirectorySyncing else { return }
+        directorySyncTask?.cancel()
+        directorySyncTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 15 * 1_000_000_000)
+            guard !Task.isCancelled else { return }
+            self?.syncDirectoryNow()
+        }
+    }
 
     // MARK: - Derived values
 
