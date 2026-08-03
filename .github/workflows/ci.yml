@@ -42,9 +42,12 @@ jobs:
       run: npm test
       continue-on-error: true  # Tests might not exist yet
     
-    - name: Package application (macOS only)
+    # Building a DMG mounts /Volumes/CCSeva and is flaky on shared GitHub
+    # runners. CI only needs to prove Electron can assemble the application;
+    # release workflows remain responsible for producing distributable DMGs.
+    - name: Package application directory (macOS only)
       if: matrix.node-version == '20.x'
-      run: npm run pack
+      run: npm run pack -- --dir
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
