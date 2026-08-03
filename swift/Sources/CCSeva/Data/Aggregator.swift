@@ -84,6 +84,7 @@ enum Aggregator {
         var weeklyMap: [Date: WeeklyUsage] = [:]
         var modelMap: [String: ModelUsage] = [:]
         var projectMap: [String: ProjectCost] = [:]
+        var syncMap: [String: UsageSyncBucket] = [:]
         var unknownModels = Set<String>()
         var maxBlockTokens = 0
 
@@ -93,6 +94,23 @@ enum Aggregator {
 
         for entry in entries {
             if !entry.priced { unknownModels.insert(entry.model) }
+
+            // Cloud sync is deliberately aggregated before leaving the scanner. The
+            // server receives daily/model totals, never individual requests or content.
+            let syncDateKey = dayFormatter.string(from: entry.timestamp)
+            let syncKey = "\(syncDateKey)\u{1F}\(entry.model)"
+            var syncBucket = syncMap[syncKey] ?? UsageSyncBucket(
+                bucketStart: calendar.startOfDay(for: entry.timestamp),
+                localDate: syncDateKey,
+                timezone: TimeZone.current.identifier,
+                harness: "claude-code",
+                provider: "anthropic",
+                model: entry.model
+            )
+            syncBucket.tokens.add(entry)
+            syncBucket.estimatedCostMicros += Int64((entry.costUSD * 1_000_000).rounded())
+            syncBucket.eventCount += 1
+            syncMap[syncKey] = syncBucket
 
             // Daily (local timezone), last 30 days.
             if entry.timestamp >= dailyCutoff {
@@ -144,6 +162,10 @@ enum Aggregator {
             weekly: weeklyMap.values.sorted { $0.weekStart < $1.weekStart },
             modelBreakdown: modelMap.values.sorted { $0.cost > $1.cost },
             projectsThisMonth: projectMap.values.sorted { $0.cost > $1.cost },
+            syncBuckets: syncMap.values.sorted {
+                if $0.bucketStart == $1.bucketStart { return $0.model < $1.model }
+                return $0.bucketStart < $1.bucketStart
+            },
             todayTokens: today?.tokens.total ?? 0,
             todayCost: today?.cost ?? 0,
             hasUnpricedModels: !unknownModels.isEmpty,

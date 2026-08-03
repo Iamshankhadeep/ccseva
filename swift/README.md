@@ -43,6 +43,10 @@ Sources/CCSeva/
 │   ├── LimitsProvider.swift   # protocol + window types
 │   ├── OAuthLimitsProvider.swift  # api.anthropic.com/api/oauth/usage client
 │   └── Credentials.swift      # Keychain ("Claude Code-credentials") / file token
+├── Directory/
+│   ├── DirectoryClient.swift  # pairing + aggregate sync API client
+│   ├── DirectoryCredentialStore.swift # separate device credential Keychain item
+│   └── DirectoryIdentity.swift # stable installation ID + app/device metadata
 ├── Support/
 │   ├── Settings.swift         # ~/.ccseva/settings.json (shared with Electron app)
 │   ├── Notifier.swift         # UNUserNotificationCenter / osascript thresholds
@@ -111,6 +115,17 @@ the session limit at HH:mm" when the projection crosses 100% before the reset.
 percentage/cost/alternate, `menuBarCostSource` today/sessionWindow). Unknown keys are
 preserved on save, so the two apps can share the file. `refreshIntervalSeconds` is a
 Swift-app extension key.
+
+### Optional directory sync
+
+The Settings tab can pair the app with `claudecode.directory` through a short-lived
+browser verification code. The resulting device credential is stored under the separate
+Keychain service `com.iamshankhadeep.ccseva.directory`. After each local scan, CCSeva
+coalesces usage into day/model buckets and sends those aggregates after a short debounce.
+Uploads are replacement upserts, so rescanning the same transcript does not double count.
+
+Claude OAuth credentials and raw transcript data never enter the directory sync payload.
+Set `CCSEVA_DIRECTORY_URL` only when testing against a local or staging server.
 
 ### Notifications
 

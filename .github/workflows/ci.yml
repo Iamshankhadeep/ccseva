@@ -66,6 +66,10 @@ jobs:
       working-directory: swift
       run: swift build -c release
 
+    - name: Run Swift tests
+      working-directory: swift
+      run: swift test
+
     - name: Assemble CCSeva.app
       working-directory: swift
       run: ./scripts/build-app.sh

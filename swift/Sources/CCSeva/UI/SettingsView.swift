@@ -15,6 +15,7 @@ struct SettingsView: View {
                 menuBarSection
                 startupSection
                 refreshSection
+                directorySection
                 aboutSection
             }
             .padding(.bottom, 8)
@@ -126,6 +127,98 @@ struct SettingsView: View {
                 .foregroundStyle(Color.neutral500)
         }
         .warmCard()
+    }
+
+    private var directorySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                SectionHeader(title: "claudecode.directory")
+                Spacer()
+                Text(directoryStatusLabel)
+                    .font(.firaCode(9))
+                    .foregroundStyle(directoryStatusColor)
+            }
+
+            switch store.directoryState {
+            case .disconnected:
+                Text("Optionally sync aggregate token counts by day and model to your private dashboard.")
+                    .font(.firaCode(10))
+                    .foregroundStyle(Color.neutral400)
+                Button("Connect with GitHub") { store.connectDirectory() }
+                    .font(.firaCode(11))
+                    .buttonStyle(.borderedProminent)
+
+            case .pairing:
+                if let pairing = store.directoryPairing {
+                    Text("Verify this code in your browser")
+                        .font(.firaCode(10))
+                        .foregroundStyle(Color.neutral400)
+                    Text(pairing.userCode)
+                        .font(.firaCode(22, weight: .bold))
+                        .foregroundStyle(Color.claudePrimary)
+                        .textSelection(.enabled)
+                    Button("Open verification page") { store.openDirectoryPairingPage() }
+                        .font(.firaCode(11))
+                } else {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Creating a secure pairing code…").font(.firaCode(10))
+                    }
+                }
+
+            case .connected:
+                if let credential = store.directoryCredential {
+                    Text(credential.accountName ?? credential.accountEmail)
+                        .font(.firaCode(11, weight: .semibold))
+                        .foregroundStyle(Color.neutral100)
+                    Text(credential.accountEmail)
+                        .font(.firaCode(9))
+                        .foregroundStyle(Color.neutral400)
+                }
+                HStack(spacing: 10) {
+                    Button(store.isDirectorySyncing ? "Syncing…" : "Sync now") {
+                        store.syncDirectoryNow()
+                    }
+                    .font(.firaCode(11))
+                    .disabled(store.isDirectorySyncing)
+
+                    Button("Disconnect") { store.disconnectDirectory() }
+                        .font(.firaCode(11))
+                }
+                if let lastSync = store.directoryLastSyncAt {
+                    Text("Last synced \(lastSync.formatted(date: .abbreviated, time: .shortened))")
+                        .font(.firaCode(9))
+                        .foregroundStyle(Color.neutral400)
+                }
+            }
+
+            if let error = store.directoryError {
+                Text(error)
+                    .font(.firaCode(9))
+                    .foregroundStyle(Color.critFrom)
+            }
+
+            Text("Only daily/model token totals and estimated cost are uploaded. Prompts, responses, transcripts, project paths, and Claude credentials never leave this Mac.")
+                .font(.firaCode(9))
+                .foregroundStyle(Color.neutral500)
+        }
+        .warmCard()
+    }
+
+    private var directoryStatusLabel: String {
+        switch store.directoryState {
+        case .disconnected: return "NOT CONNECTED"
+        case .pairing: return "PAIRING"
+        case .connected: return store.isDirectorySyncing ? "SYNCING" : "CONNECTED"
+        }
+    }
+
+    private var directoryStatusColor: Color {
+        switch store.directoryState {
+        case .disconnected: return .neutral500
+        case .pairing: return .warnFrom
+        case .connected: return .safeFrom
+        }
     }
 
     // MARK: - Bindings

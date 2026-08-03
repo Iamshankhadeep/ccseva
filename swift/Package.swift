@@ -12,6 +12,11 @@ let package = Package(
             name: "CCSeva",
             path: "Sources/CCSeva",
             resources: [.process("Resources")]
-        )
+        ),
+        .testTarget(
+            name: "CCSevaTests",
+            dependencies: ["CCSeva"],
+            path: "Tests/CCSevaTests"
+        ),
     ]
 )
